@@ -141,8 +141,11 @@ If it is above 0, switch the calibration set — see [`INSTALL.md`](INSTALL.md),
 
 ## Hiding root from banking apps (optional, advanced)
 
-The kernel ships **SuSFS**. To hide root from specific apps (banking,
-authenticators) use the KernelSU app's denylist: **Settings → Configure
-denylist**, tick the apps, and with the umount module active they stop seeing
-root. USB debugging (`adb_enabled`) is a separate detection; turn it off
-(Developer options → USB debugging) when using those apps if they flag it.
+KernelSU-Next's `su` is at **`/system/bin/su`** and is visible to apps, so it is a
+root indicator. Don't delete it — it *is* the root entry point (`su` stops
+working). Instead hide it per-app: the kernel ships **SuSFS**, and the KernelSU-Next
+app has a **denylist / App Profiles** — **Settings → Configure denylist**, tick the
+apps (banking, authenticators), and with the umount + SuSFS active they stop seeing
+`su` and the root modules. USB debugging (`adb_enabled`) is a separate detection;
+turn it off (Developer options → USB debugging) when using those apps if they flag
+it.

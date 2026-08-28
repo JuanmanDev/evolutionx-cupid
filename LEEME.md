@@ -23,7 +23,7 @@ Evolution X los fallos que veas en esta compilación.
 | 15 pasos de volumen para notificaciones y timbre | Venían con 7 (multimedia tiene 15), así que el nivel más bajo ya sonaba fuerte. |
 | Curva de volumen más baja en notificaciones y timbre | Su curva empezaba en −29,7 dB mientras la de multimedia empieza en −58 dB. Ahora el primer paso queda sobre −45 dB en vez de −26 dB. El volumen máximo no cambia. |
 | `ro.debuggable=0` | La ROM se presenta como compilación de usuario con release-keys; llevar `ro.debuggable=1` encima lo detectan Play Integrity y las apps de banca, y cuesta rendimiento. |
-| Root con KernelSU | El root lo da KernelSU, compilado en el kernel. Ojo: el binario `su` de AOSP **sigue presente** en `/system/xbin/su`; ver "Límites conocidos". |
+| Root con KernelSU | El root lo da KernelSU-Next (v3.0.1 + SuSFS), compilado en el kernel. Su `su` vive en `/system/bin/su` y es visible para las apps — ocúltalo por app con la denylist de KernelSU; ver "Límites conocidos". |
 | App de cámara de 50 MP (`Cam50Test`) | Es la única forma de obtener fotos reales a resolución completa en este móvil (se explica abajo). |
 
 ## Sobre el modo de 50 MP — léelo antes de preguntar
@@ -65,10 +65,11 @@ root con KernelSU.
 
 Límites conocidos: los 50 MP solo por la app incluida y con las pegas de color de
 arriba; GCam no puede hacer 50 MP en este móvil; la compilación va firmada con
-las claves públicas de AOSP; y el binario `su` de AOSP sigue instalado en
-`/system/xbin/su`. Filtrarlo del build no ha surtido efecto (lo añade
-`base_system.mk` después de heredar los makefiles del dispositivo), así que el
-root es más visible de lo necesario. Queda pendiente.
+las claves públicas de AOSP; y el root es visible para las apps — el `su` de
+KernelSU-Next está en `/system/bin/su` (es el punto de entrada del root, así que
+no se puede borrar sin más). Ocúltalo de las apps que lo detectan (banca,
+integridad) con la **denylist / Perfiles de app** de KernelSU-Next, apoyada en el
+**SuSFS** que ya trae el kernel. Ver `docs/RECOMENDACIONES.md` → "Ocultar root".
 
 ## Dos variantes: con o sin KernelSU
 

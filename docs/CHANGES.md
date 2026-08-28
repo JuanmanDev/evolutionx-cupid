@@ -59,9 +59,13 @@ The framework patches are in [`../patches/`](../patches/).
   - **Correcting the 50 MP colour with gains**: the deviation is tone-dependent
     and the HAL ignores gains on that route.
 
-## Pending
+## Root visibility (`/system/bin/su`)
 
-  - **Remove the AOSP `su`.** `PRODUCT_PACKAGES_DEBUG := $(filter-out su,...)` has
-    no effect from `device.mk` or `evolution_cupid.mk`; `base_system.mk` adds it
-    after the device makefiles are inherited. Root is more visible to apps than it
-    needs to be.
+`/system/bin/su` is **KernelSU-Next's own `su`** (it *is* `ksud`; in its source,
+`if arg0 == "su" || arg0 == "/system/bin/su"`). It is the root entry point, so it
+can't be deleted without losing root. It is visible to apps, so it is a root
+indicator. There is **no** stray AOSP `su` at `/system/xbin/su` (an earlier note
+said so — inaccurate). To hide root from apps that check for it (banking,
+integrity), use the KernelSU-Next **denylist / App Profiles**, backed by the
+**SuSFS** already compiled into the kernel — a per-app hide, done from the
+KernelSU-Next app. See [`RECOMMENDATIONS.md`](RECOMMENDATIONS.md) → "Hiding root".

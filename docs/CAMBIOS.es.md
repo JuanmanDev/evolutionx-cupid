@@ -52,16 +52,14 @@ detalle completo, con las medidas, está en `NOTAS.md`.
 
 ## Pendientes
 
-  - **Quitar el `su` de AOSP.** Se intento filtrarlo con
-    `PRODUCT_PACKAGES_DEBUG := $(filter-out su,$(PRODUCT_PACKAGES_DEBUG))`, primero
-    en `device.mk` y luego al final de `evolution_cupid.mk`, y en ninguno de los dos
-    sitios surte efecto: sigue apareciendo en `installed-files.txt` y en el movil.
-    Lo anade `base_system.mk` (solo cuando `LINEAGE_BUILD` esta vacio) y la
-    combinacion de variables de producto se resuelve despues. Vias que quedan:
-    compilar la variante `user` en vez de `userdebug`, definir `LINEAGE_BUILD`, o
-    taparlo desde el modulo de KernelSU montando un fichero vacio encima.
-  - **Ocultar el root** para las apps que lo detectan. El kernel ya trae SUSFS
-    (`CONFIG_KSU_SUSFS=y`), pero no esta configurado.
+  - **Visibilidad del `su`.** `/system/bin/su` es el `su` **de KernelSU-Next** (es
+    `ksud`), el punto de entrada del root: no se puede borrar sin perder root. No
+    hay ningun `su` de AOSP suelto en `/system/xbin/su` (una nota anterior lo decia,
+    era incorrecto). Es visible para las apps, asi que delata el root.
+  - **Ocultar el root** para las apps que lo detectan (banca, integridad): el kernel
+    ya trae SuSFS (`CONFIG_KSU_SUSFS=y`); usar la **denylist / Perfiles de app** de
+    KernelSU-Next apoyada en SuSFS para ocultar `su` y los modulos por app. Ver
+    `RECOMENDACIONES.md` -> "Ocultar root".
   - **Medir el consumo en reposo** con el movil quieto una hora y sin ADB
     conectado; las medidas hechas hasta ahora estaban falseadas por la propia
     instrumentacion.

@@ -23,7 +23,7 @@ build to the Evolution X team.
 | 15 volume steps for notifications and ringtone | They shipped with 7 (media has 15), so the lowest step was already loud. |
 | Lower volume curve for notifications and ringtone | Their curve started at −29.7 dB while media starts at −58 dB. The first step now lands around −45 dB instead of −26 dB. Maximum volume is unchanged. |
 | `ro.debuggable=0` | The build presents itself as a user build with release-keys; shipping `ro.debuggable=1` on top of that is detected by Play Integrity and banking apps, and costs performance. |
-| Root from KernelSU | Root comes from KernelSU, built into the kernel. Note: the AOSP `su` binary is **still present** at `/system/xbin/su` — see "Known limits". |
+| Root from KernelSU | Root comes from KernelSU-Next (v3.0.1 + SuSFS), built into the kernel. Its `su` lives at `/system/bin/su` and is visible to apps — hide it per-app with the KernelSU denylist; see "Known limits". |
 | 50 MP camera app (`Cam50Test`) | The only way to get real full-sensor stills on this device (see below). |
 
 ## About the 50 MP mode — read this before asking
@@ -65,10 +65,11 @@ KernelSU root.
 
 Known limits: 50 MP only through the bundled app and with the colour caveats
 above; GCam cannot do 50 MP on this device; the build is signed with public AOSP
-test keys; and the AOSP `su` binary is still installed at `/system/xbin/su`.
-Filtering it out of the build did not take effect (the package is added by
-`base_system.mk` after the device makefiles are inherited), so root is more
-visible to apps than it needs to be. Pending work.
+test keys; and root is visible to apps — KernelSU-Next's `su` sits at
+`/system/bin/su` (it *is* the root entry point, so it can't just be deleted).
+Hide it from the apps that care (banking, integrity checks) with the KernelSU-Next
+**denylist / App Profiles**, backed by the **SuSFS** already in the kernel. See
+`docs/RECOMMENDATIONS.md` → "Hiding root".
 
 ## Two variants: with or without KernelSU
 

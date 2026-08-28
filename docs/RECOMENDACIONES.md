@@ -144,9 +144,11 @@ Si sale más de 0, cambia el juego de calibración — ver
 
 ## Ocultar root a la banca (opcional, avanzado)
 
-El kernel trae **SuSFS**. Para ocultar el root a apps concretas (banca,
-autenticadores) usa la denylist de la app de KernelSU: **Ajustes → Configurar
-denylist**, marca las apps, y con el módulo de umount activo dejan de ver el
-root. La depuración USB (`adb_enabled`) es una detección aparte; desactívala
-(`Opciones de desarrollador → Depuración USB`) cuando uses esas apps si te la
-detectan.
+El `su` de KernelSU-Next está en **`/system/bin/su`** y es visible para las apps,
+así que es un delator de root. No lo borres — es el punto de entrada del root (`su`
+deja de funcionar). Ocúltalo por app: el kernel trae **SuSFS**, y la app de
+KernelSU-Next tiene **denylist / Perfiles de app** — **Ajustes → Configurar
+denylist**, marca las apps (banca, autenticadores), y con el umount + SuSFS activos
+dejan de ver `su` y los módulos root. La depuración USB (`adb_enabled`) es una
+detección aparte; desactívala (`Opciones de desarrollador → Depuración USB`) cuando
+uses esas apps si te la detectan.
