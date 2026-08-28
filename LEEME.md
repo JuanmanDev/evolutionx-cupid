@@ -8,6 +8,12 @@ dice sin adornos qué funciona, qué no y por qué.
 **Esto no es una versión oficial de Evolution X.** No reportes al equipo de
 Evolution X los fallos que veas en esta compilación.
 
+## Capturas
+
+| Evolution X | Personalización | Dolby Atmos |
+|---|---|---|
+| [<img src="screenshots/01-evolution-x.png" width="230">](screenshots/01-evolution-x.png) | [<img src="screenshots/02-customization.png" width="230">](screenshots/02-customization.png) | [<img src="screenshots/03-dolby-atmos.png" width="230">](screenshots/03-dolby-atmos.png) |
+
 ## Qué cambia respecto a una compilación normal
 
 | Cambio | Por qué |

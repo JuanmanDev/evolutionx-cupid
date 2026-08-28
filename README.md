@@ -8,6 +8,12 @@ say plainly what works, what does not, and why.
 **This is not an official Evolution X release.** Do not report bugs from this
 build to the Evolution X team.
 
+## Screenshots
+
+| Evolution X | Customization | Dolby Atmos |
+|---|---|---|
+| [<img src="screenshots/01-evolution-x.png" width="230">](screenshots/01-evolution-x.png) | [<img src="screenshots/02-customization.png" width="230">](screenshots/02-customization.png) | [<img src="screenshots/03-dolby-atmos.png" width="230">](screenshots/03-dolby-atmos.png) |
+
 ## What is different from a stock build
 
 | Change | Why |
