@@ -64,13 +64,29 @@ de Xiaomi—; **no desbloquean megapíxeles**. Puedes probarlas para gusto de co
 
 ## Cámara de Xiaomi: los modos extra que se descargan pueden cerrarse
 
-La cámara de Xiaomi (port de MiuiCamera) muestra modos extra (algunos filtros,
-documento, larga exposición, clon, etc.) que **descargan componentes al vuelo**.
-En una ROM no-MIUI esa descarga/dependencia de servicios MIUI muchas veces no
-está, así que al pulsar el modo **se cierra la app**. Los modos base (Foto, 50 MP,
-Vídeo, Retrato, Noche, Pro) funcionan. Que un modo concreto se pueda arreglar
-depende de qué necesite (un servicio MIUI que falta vs una descarga fallida) — hay
-que diagnosticarlo del log del cierre. Si te importa alguno, se captura y se mira.
+La cámara de Xiaomi (port de MiuiCamera) muestra modos extra con **flecha de
+descarga** (Clonar, Panorámica, VLOG, efectos de película, exposición pro, …). Al
+pulsar uno **se cierra la app**. Diagnosticado: esos modos descargan un componente
+por Google Play Dynamic Delivery (el de Clonar son ~77 MB), pero este ROM
+**bloquea la red de MiuiCamera con SELinux** — al dominio `miuicamera_app` se le
+niega crear sockets, a propósito, para matar el proceso de ads/telemetría de
+Xiaomi (`mi_ad_pubsub`). La red bloqueada lanza una `SecurityException` no
+capturada → cierre:
+
+    avc: denied { create } tclass=udp_socket ... app=com.android.camera
+    java.lang.SecurityException: Permission denied (missing INTERNET permission?)
+
+**¿Se puede arreglar?** En parte. Permitir la red del dominio (una regla SELinux
+de KernelSU, `permissive miuicamera_app` o un `allow` puntual) **quita el cierre**
+— probado. Pero: (1) vuelve la red de ads/telemetría de Xiaomi, y (2) el módulo
+sigue sin estar incluido (`Split clone … is not installed`, `no fused modules`) y
+Google Play no lo sirve a este port instalado como app de sistema — así que el
+modo tampoco descarga. Resultado: "no crashea, pero la descarga falla", no un modo
+funcional. Así que no compensa.
+
+**Los modos base funcionan**: Foto, **50 MP**, Vídeo, Retrato, Noche, Pro, Cámara
+lenta, Time-lapse, Documentos, Vídeo dual. Para panorámica y similares, usa GCam u
+otra app.
 
 ## Launcher: Lawnchair (búsqueda de apps sin acentos)
 

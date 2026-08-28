@@ -64,13 +64,28 @@ unlock megapixels. Try them for colour taste.
 
 ## Xiaomi camera: extra modes that need downloading may crash
 
-The Xiaomi camera (MiuiCamera port) shows extra modes (some filters, document,
-long-exposure, clone, etc.) that **download components on demand**. On a non-MIUI
-ROM that download/MIUI-service dependency often isn't there, so tapping the mode
-**closes the app**. The core modes (Photo, 50 MP, Video, Portrait, Night, Pro)
-work. Whether a given crashing mode can be fixed depends on what it needs (a
-missing MIUI service vs a failed download) — it has to be diagnosed from the crash
-log. If you hit one you care about, capture it and it can be looked at.
+The Xiaomi camera (MiuiCamera port) shows extra modes with a **download arrow**
+(Clone, Panorama, VLOG, movie effects, long-exposure pro, …). Tapping one
+**closes the app**. Diagnosed: those modes fetch a component via Google Play
+Dynamic Delivery (the Clone module is ~77 MB), but this ROM **blocks MiuiCamera's
+network with SELinux** — the `miuicamera_app` domain is denied socket creation, on
+purpose, to kill Xiaomi's ad/telemetry process (`mi_ad_pubsub`). The blocked
+network throws an uncaught `SecurityException` → crash:
+
+    avc: denied { create } tclass=udp_socket ... app=com.android.camera
+    java.lang.SecurityException: Permission denied (missing INTERNET permission?)
+
+**Can it be fixed?** Partly. Allowing the domain's network (a KernelSU SELinux
+rule, `permissive miuicamera_app` or a targeted `allow`) **stops the crash** —
+tested. But: (1) it brings back Xiaomi's ad/telemetry network, and (2) the module
+still isn't bundled (`Split clone … is not installed`, `no fused modules`) and
+Google Play won't serve it to this system-installed port — so the mode fails to
+download anyway. Net result: "no crash, download fails" rather than a working
+mode. So it isn't really worth it.
+
+**The core modes work**: Photo, **50 MP**, Video, Portrait, Night, Pro,
+Slow-motion, Time-lapse, Documents, Dual video. For panorama and similar, use GCam
+or another app.
 
 ## Launcher: Lawnchair (accent-insensitive app search)
 
