@@ -49,6 +49,29 @@ Las configuraciones XML de la comunidad (p. ej. celsoazevedo) **afinan el
 procesado** (color, ruido, tonos) a 12,6 MP — que es donde GCam gana a la cámara
 de Xiaomi—; **no desbloquean megapíxeles**. Puedes probarlas para gusto de color.
 
+## Extras que funcionan (bueno saberlo)
+
+  - **Dolby Atmos** funciona (`co.aospa.dolby.xiaomi`). Abre **Dolby Atmos** desde
+    el cajón de apps para elegir perfil (Música / Película / …); se aplica a
+    altavoz y auriculares.
+  - **Brillo del flash regulable.** Mantén pulsada la tesela de **Linterna** en
+    los ajustes rápidos para ver un deslizador de brillo (función de Evolution X;
+    el driver del LED de cupid admite esos niveles — la ROM ajusta las corrientes
+    de flash/linterna en el HAL de cámara). Útil para una linterna más suave o un
+    flash de cámara más potente.
+  - **15 pasos de volumen** en timbre/notificación con primer paso más bajo (ver
+    [`CAMBIOS.es.md`](CAMBIOS.es.md)).
+
+## Cámara de Xiaomi: los modos extra que se descargan pueden cerrarse
+
+La cámara de Xiaomi (port de MiuiCamera) muestra modos extra (algunos filtros,
+documento, larga exposición, clon, etc.) que **descargan componentes al vuelo**.
+En una ROM no-MIUI esa descarga/dependencia de servicios MIUI muchas veces no
+está, así que al pulsar el modo **se cierra la app**. Los modos base (Foto, 50 MP,
+Vídeo, Retrato, Noche, Pro) funcionan. Que un modo concreto se pueda arreglar
+depende de qué necesite (un servicio MIUI que falta vs una descarga fallida) — hay
+que diagnosticarlo del log del cierre. Si te importa alguno, se captura y se mira.
+
 ## Launcher: Lawnchair (búsqueda de apps sin acentos)
 
 Launcher recomendado: **[Lawnchair](https://lawnchair.app/)**. Además del aspecto

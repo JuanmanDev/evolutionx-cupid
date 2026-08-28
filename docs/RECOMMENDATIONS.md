@@ -50,6 +50,28 @@ Community XML configs (e.g. celsoazevedo) **tune the processing** (colour, noise
 tones) at 12.6 MP — which is where GCam beats the Xiaomi camera — they do **not**
 unlock megapixels. Try them for colour taste.
 
+## Extras that work (good to know)
+
+  - **Dolby Atmos** works (`co.aospa.dolby.xiaomi`). Open **Dolby Atmos** from the
+    app drawer to pick a profile (Music / Movie / …); it applies to speaker and
+    headphones.
+  - **Adjustable flashlight brightness.** Long-press the **Flashlight** quick
+    settings tile to get a brightness slider (Evolution X feature; cupid's LED
+    driver supports the current levels — the ROM tunes flash/torch currents in the
+    camera HAL). Useful for a softer torch or a stronger camera flash.
+  - **15 volume steps** for ringtone/notification with a lower first step (see
+    [`CHANGES.md`](CHANGES.md)).
+
+## Xiaomi camera: extra modes that need downloading may crash
+
+The Xiaomi camera (MiuiCamera port) shows extra modes (some filters, document,
+long-exposure, clone, etc.) that **download components on demand**. On a non-MIUI
+ROM that download/MIUI-service dependency often isn't there, so tapping the mode
+**closes the app**. The core modes (Photo, 50 MP, Video, Portrait, Night, Pro)
+work. Whether a given crashing mode can be fixed depends on what it needs (a
+missing MIUI service vs a failed download) — it has to be diagnosed from the crash
+log. If you hit one you care about, capture it and it can be looked at.
+
 ## Launcher: Lawnchair (accent-insensitive app search)
 
 Recommended launcher: **[Lawnchair](https://lawnchair.app/)**. Besides the clean
