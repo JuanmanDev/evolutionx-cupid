@@ -83,6 +83,15 @@ Google Play won't serve it to this system-installed port — so the mode fails t
 download anyway. Net result: "no crash, download fails" rather than a working
 mode. So it isn't really worth it.
 
+**Can't I just install one APK with all modes?** No. Those modes are Android
+Dynamic Feature Modules — you'd need Xiaomi's original app bundle (`.aab`, not
+public) to fuse them into one APK, and the per-version split APKs aren't
+distributed on their own. The generic "Xiaomi Camera" builds on APKMirror are the
+**MIUI** version: they expect the MIUI framework and lack this port's AOSP
+adaptations (50 MP, SELinux domain, property fixes), so installing one over this
+port breaks the working camera. Some modes (Clone, AI watermark) also need MIUI
+services AOSP doesn't have. **Use GCam for panorama and the other missing modes.**
+
 **The core modes work**: Photo, **50 MP**, Video, Portrait, Night, Pro,
 Slow-motion, Time-lapse, Documents, Dual video. For panorama and similar, use GCam
 or another app.

@@ -84,6 +84,16 @@ Google Play no lo sirve a este port instalado como app de sistema — así que e
 modo tampoco descarga. Resultado: "no crashea, pero la descarga falla", no un modo
 funcional. Así que no compensa.
 
+**¿No puedo instalar un APK con todos los modos?** No. Esos modos son Dynamic
+Feature Modules de Android — harían falta el app bundle original de Xiaomi
+(`.aab`, no público) para fusionarlos en un APK, y los split APKs de cada versión
+no se distribuyen sueltos. Las "Xiaomi Camera" genéricas de APKMirror son la
+versión **MIUI**: esperan el framework MIUI y no traen las adaptaciones AOSP de
+este port (50 MP, dominio SELinux, propiedades), así que instalar una encima
+rompe la cámara que funciona. Algunos modos (Clonar, marca de agua IA) además
+necesitan servicios MIUI que AOSP no tiene. **Usa GCam para la panorámica y los
+demás modos que faltan.**
+
 **Los modos base funcionan**: Foto, **50 MP**, Vídeo, Retrato, Noche, Pro, Cámara
 lenta, Time-lapse, Documentos, Vídeo dual. Para panorámica y similares, usa GCam u
 otra app.
