@@ -104,7 +104,8 @@ En el repo:
 Instalación rápida: une la ROM y luego `scripts/flashear_todo.sh --ksu --wipe`.
 Los pasos manuales están en `docs/INSTALACION.md`; los consejos de cámara/GCam/
 animaciones en `docs/RECOMENDACIONES.md`; y todo el estudio de los 50 MP en
-`docs/50MP.md`.
+`docs/50MP.md`. Sobre las apps de Deutsche Bank (el boot sin root arregla la app
+principal; el 2FA lo bloquea la atestación por hardware): `docs/BANCO.es.md`.
 
 ## Créditos
 

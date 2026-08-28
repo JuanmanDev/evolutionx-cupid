@@ -116,6 +116,7 @@ English is the primary language; every doc has a Spanish version (`*.es.md`, or
 | [`docs/CAMERA-50MP.md`](docs/CAMERA-50MP.md) | Deep camera notes (modes, remosaic, colour). |
 | [`docs/CHANGES.md`](docs/CHANGES.md) | Every change vs the official tree. |
 | [`docs/NOTES.md`](docs/NOTES.md) | Performance/power notes measured on-device. |
+| [`docs/BANK.md`](docs/BANK.md) | Deutsche Bank apps: no-root fixes the main app; 2FA is blocked by hardware attestation. |
 | [`patches/`](patches/) | The AOSP framework patches. |
 
 ## Credits

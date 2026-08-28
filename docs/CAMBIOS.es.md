@@ -55,7 +55,9 @@ detalle completo, con las medidas, está en `NOTAS.md`.
   - **Visibilidad del `su`.** `/system/bin/su` es el `su` **de KernelSU-Next** (es
     `ksud`), el punto de entrada del root: no se puede borrar sin perder root. No
     hay ningun `su` de AOSP suelto en `/system/xbin/su` (una nota anterior lo decia,
-    era incorrecto). Es visible para las apps, asi que delata el root.
+    era incorrecto). Es visible para las apps, asi que delata el root. **Resuelto
+    para banca con `boot-noksu.img`**: sin KernelSU no hay `su` en absoluto y el
+    anti-root de la app de DB informa `DeviceRooted=false`. Ver `docs/BANCO.es.md`.
   - **Ocultar el root** para las apps que lo detectan (banca, integridad): el kernel
     ya trae SuSFS (`CONFIG_KSU_SUSFS=y`); usar la **denylist / Perfiles de app** de
     KernelSU-Next apoyada en SuSFS para ocultar `su` y los modulos por app. Ver
