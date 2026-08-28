@@ -95,9 +95,21 @@ In the repo:
     docs/        install guide (EN/ES), 50 MP write-up, recommendations, changes
 
 Quick install: join the ROM, then `scripts/flashear_todo.sh --ksu --wipe`.
-See `docs/INSTALACION.md` / `docs/INSTALL.md` for the manual steps,
-`docs/RECOMENDACIONES.md` for camera/GCam/animation tips, and `docs/50MP.md`
-for the full 50 MP research.
+
+## Documentation
+
+English is the primary language; every doc has a Spanish version (`*.es.md`, or
+`LEEME.md` / `INSTALACION.md` / `RECOMENDACIONES.md`).
+
+| Doc | About |
+|---|---|
+| [`docs/INSTALL.md`](docs/INSTALL.md) | Step-by-step flashing (manual). |
+| [`docs/RECOMMENDATIONS.md`](docs/RECOMMENDATIONS.md) | Camera (50 MP), GCam setup, Lawnchair, 0.5× animations, status bar. |
+| [`docs/50MP.md`](docs/50MP.md) | The full 50 MP story — and why GCam can't do it. |
+| [`docs/CAMERA-50MP.md`](docs/CAMERA-50MP.md) | Deep camera notes (modes, remosaic, colour). |
+| [`docs/CHANGES.md`](docs/CHANGES.md) | Every change vs the official tree. |
+| [`docs/NOTES.md`](docs/NOTES.md) | Performance/power notes measured on-device. |
+| [`patches/`](patches/) | The AOSP framework patches. |
 
 ## Credits
 

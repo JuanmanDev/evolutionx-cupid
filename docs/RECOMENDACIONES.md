@@ -49,6 +49,15 @@ Las configuraciones XML de la comunidad (p. ej. celsoazevedo) **afinan el
 procesado** (color, ruido, tonos) a 12,6 MP — que es donde GCam gana a la cámara
 de Xiaomi—; **no desbloquean megapíxeles**. Puedes probarlas para gusto de color.
 
+## Launcher: Lawnchair (búsqueda de apps sin acentos)
+
+Launcher recomendado: **[Lawnchair](https://lawnchair.app/)**. Además del aspecto
+limpio estilo Pixel y sus muchos ajustes, su **búsqueda de apps ignora los
+acentos**: escribir `camara` encuentra *Cámara*, `telefono` encuentra *Teléfono*.
+El launcher de serie distingue acentos y se los salta. Instálalo, ponlo por
+defecto (Ajustes → Aplicaciones → Aplicaciones predeterminadas → App de inicio) y
+usa el buscador del cajón de apps.
+
 ## Velocidad de las animaciones a 0,5× (interfaz más ágil)
 
 El sistema se siente más rápido bajando las animaciones a la mitad:

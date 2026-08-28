@@ -1,0 +1,53 @@
+# Performance and power notes on cupid
+
+Things measured on the device, with the reason, so they don't have to be
+investigated again. *(Spanish: [`NOTAS.es.md`](NOTAS.es.md).)*
+
+## The camera HAL shipped with logging maxed out (fixed)
+
+`vendor/etc/camera/camxoverridesettings.txt` came with:
+
+    logInfoMask=0x10098
+    logConfigMask=0x80
+    overrideLogLevels=0x1F      <- every level, VERBOSE included
+    enableTxtLogging=1          <- also dumps to /data/vendor/camera
+    offlineLogNumber=14
+
+With that, every capture request wrote dozens of lines (CamX, GME, STATS_AEC,
+STATS_AF...). While recording video that is dozens per frame, with the CPU and
+disk writes that go with it. Xiaomi ships a `camxoverridesettingsOfCloseLog.txt`
+right next to it, i.e. they turn it off themselves when they want.
+
+It is now errors only (`overrideLogLevels=0x1`, masks at 0, `enableTxtLogging=0`).
+Original kept as `camxoverridesettings.txt.con-logs`. **No image parameter
+changes.** Measured with the camera open for 8 seconds: hundreds of lines/second
+before, 6 lines total after. 98 MB the text dump had left in
+`/data/vendor/camera/offlinelog` were also removed.
+
+## /vendor is 100% full and won't accept live edits
+
+    /dev/block/dm-4  1.9G  1.9G  6.0M  100%  /vendor
+
+Even though `df` says 6 MB free, it won't write 10 KB: copying the HAL settings
+file fails with "No space left on device" **and leaves the target at 0 bytes**.
+Editing anything in /vendor on the phone doesn't just fail, it destroys the file.
+
+If something in /vendor must change: change it in the tree, `m vendorimage`,
+`fastboot flash vendor` from fastbootd. As a temporary patch it can be served from
+/data with a `mount -o bind`, after labelling it
+`u:object_r:vendor_configs_file:s0`; that undoes itself on reboot.
+
+## The grid of dots in captures was Smart Pixels
+
+Symptom: screenshots (and the screen itself) with a grid of black dots. Cause:
+`Settings.Secure.smart_pixel_filter_enabled=1` with `smart_pixel_filter_percent=25`,
+which turns off one pixel in four to save OLED power. Turn it off:
+
+    adb shell settings put secure smart_pixel_filter_enabled 0
+
+## /system was 100% full too (relevant if you rebuild boot/system)
+
+The dynamic `/system` (dm-2) shipped at 100%. Writing a slightly larger
+`cameraserver` failed until the ext4 was grown into the ~20 MB of unused space in
+its device-mapper block: `resize2fs /dev/block/dm-2` (verity is off, so /system is
+writable). Kept here because it bit hard during development.
