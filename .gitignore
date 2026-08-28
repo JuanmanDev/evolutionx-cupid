@@ -1,0 +1,12 @@
+# Las imagenes de particion no van al repositorio: pesan mas de 4 GB en total y
+# GitHub no admite ficheros de mas de 100 MB. Se publican como adjuntos de una
+# "release", partidos en varios trozos si hace falta.
+images/
+*.img
+*.zip
+*.7z
+*.part*
+
+# Ficheros de trabajo
+*.log
+*.tmp
