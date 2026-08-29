@@ -126,3 +126,12 @@ to **everyone who has maintained the Xiaomi 12 (cupid)** device/kernel trees, to
 **[KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next)** and
 **[SuSFS](https://gitlab.com/simonpunk/susfs4ksu)**, to **LineageOS** and to the
 community that documents and shares.
+
+<br>
+
+## 💖 Support this project
+Maintaining and compiling **Evolution X 17** for the Xiaomi 12 requires a massive amount of RAM. Currently, compilation takes me about **4 hours**. With your support, I could afford a RAM upgrade or a more powerful server to reduce that time to **under 1 hour**, speeding up future updates for everyone. Please consider supporting it!
+
+[![GitHub Sponsor](https://img.shields.io/badge/Sponsor-JuanmanDev-ea4aaa?style=for-the-badge&logo=github)](https://github.com/sponsors/JuanmanDev) [![Ko-fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/juanmandev) [![PayPal](https://img.shields.io/badge/PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/juanmandev)
+
+<br>
