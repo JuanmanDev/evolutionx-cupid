@@ -8,6 +8,30 @@ say plainly what works, what does not, and why.
 **This is not an official Evolution X release.** Do not report bugs from this
 build to the Evolution X team.
 
+## ⬇️ Latest release / Última versión: **v2** (cameras / cámaras)
+
+Download & full install guide (EN/ES) with all commands, root/no-root and the
+camera setup: **[Releases → v2](../../releases/tag/v2)**.
+Descarga y guía completa de instalación (inglés/español) con todos los comandos,
+root/sin-root y la configuración de cámara: **[Releases → v2](../../releases/tag/v2)**.
+
+> ⚠️ Clean flash only — **you cannot migrate from Evolution X 16** and **all data
+> is wiped**. No warranty. / Solo instalación limpia — **no se puede migrar desde
+> Evolution X 16** y **se borran todos los datos**. Sin garantías.
+
+### The 4 lenses / Las 4 lentes (Xiaomi 12 has main + ultrawide + macro + front)
+| Lens / Lente | App |
+|---|---|
+| Main / Principal, Front / Frontal | any / cualquiera |
+| Ultrawide / Gran angular | **MIUICamera** · Aperture (0.6×) · **MGC + `qcom` camera HAL** (root) |
+| **Macro** | **MIUICamera → "Supermacro"** toggle (top bar) |
+| 50 MP | Xiaomi Camera · Aperture · Cam50Test |
+
+**GCam/LMC** does main + front only (its engine has no aux-lens tuning). The real
+**ultrawide** works in **MGC (BSG) with the camera HAL switched to `qcom`**
+(loses Xiaomi Supermacro + 50 MP while on `qcom` — switch back for those). Full
+commands in the v2 release notes.
+
 ## Screenshots
 
 | Evolution X | Customization | Dolby Atmos |
