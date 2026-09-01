@@ -29,10 +29,11 @@ root/sin-root y la configuración de cámara: **[Releases → v2](../../releases
 
 **GCam/LMC** does main + front only (its engine has no aux-lens tuning). The real
 **ultrawide** works in **MGC (BSG) with the camera HAL switched to `qcom`**
-(loses Xiaomi Supermacro + 50 MP while on `qcom` — switch back for those). Make it
-permanent with the **KernelSU module** `qcom-camera-hal-module.zip` (in the v2
-release) — one-click reversible: disable it + reboot to get macro/50 MP back. Full
-commands in the v2 release notes.
+(loses Xiaomi Supermacro + 50 MP while on `qcom` — switch back for those). The **KernelSU
+module** `qcom-camera-hal-module.zip` (in the v2 release) **auto-switches** the HAL
+by foreground app (MIUICamera → xiaomi, MGC/GCam → qcom; default xiaomi). One
+caveat: switching between the two families restarts the camera service, so the
+first open glitches — just reopen. Full commands in the v2 release notes.
 
 ## Screenshots
 
