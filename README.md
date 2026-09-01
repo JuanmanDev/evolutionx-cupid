@@ -29,7 +29,9 @@ root/sin-root y la configuración de cámara: **[Releases → v2](../../releases
 
 **GCam/LMC** does main + front only (its engine has no aux-lens tuning). The real
 **ultrawide** works in **MGC (BSG) with the camera HAL switched to `qcom`**
-(loses Xiaomi Supermacro + 50 MP while on `qcom` — switch back for those). Full
+(loses Xiaomi Supermacro + 50 MP while on `qcom` — switch back for those). Make it
+permanent with the **KernelSU module** `qcom-camera-hal-module.zip` (in the v2
+release) — one-click reversible: disable it + reboot to get macro/50 MP back. Full
 commands in the v2 release notes.
 
 ## Screenshots
