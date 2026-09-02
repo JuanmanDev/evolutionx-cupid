@@ -50,8 +50,14 @@ Manual switch (KernelSU root):
 
 `qcom_camera_hal` (in `/data/adb/modules/`, zip under `modules/`): a daemon
 (`service.sh`) watches the foreground app and **switches the HAL by itself** —
-MIUICamera → `xiaomi` (macro + 50 MP), MGC/GCam/Aperture → `qcom` (wide). Default
-`xiaomi`. ⚠️ Switching families restarts the camera-provider (~2-3 s) and kills the
+MIUICamera → `xiaomi` (macro + 50 MP), MGC/GCam/Aperture/OpenCamera/**Gemini** →
+`qcom`. Default `xiaomi`. Re-asserts the HAL every second (no-op if already right),
+so it corrects drift. **Third-party apps (Gemini, etc.) need `qcom`**: on `xiaomi`
+they come out black. That's why Gemini (`com.google.android.googlequicksearchbox` +
+`com.google.android.apps.bard`) is in the qcom list; if it's still black right
+after using MIUICamera, that's the provider-restart flicker — it recovers in 2-3 s.
+(Note: Gemini's preview is a SurfaceView; a screenshot looks black even when it
+works — check the saved photo, not a screencap.) ⚠️ Switching families restarts the camera-provider (~2-3 s) and kills the
 opening app: when **alternating** between MIUICamera and MGC the 1st open fails,
 reopen and it works; within the same app, no issue. Disable it (KSU manager or
 `touch .../disable`) to stay on `xiaomi`.

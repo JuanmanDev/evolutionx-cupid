@@ -52,8 +52,14 @@ Cambio manual (root KernelSU):
 
 `qcom_camera_hal` (en `/data/adb/modules/`, zip en `modules/`): un daemon
 (`service.sh`) mira la app en primer plano y **cambia el HAL solo** — MIUICamera →
-`xiaomi` (macro + 50 MP), MGC/GCam/Aperture → `qcom` (gran angular). Default
-`xiaomi`. ⚠️ Cambiar de familia reinicia el camera-provider (~2-3 s) y mata la app
+`xiaomi` (macro + 50 MP), MGC/GCam/Aperture/OpenCamera/**Gemini** → `qcom`. Default
+`xiaomi`. Re-afirma el HAL cada segundo (no-op si ya está bien), así corrige
+deriva. **Apps de terceros (Gemini, etc.) necesitan `qcom`**: en `xiaomi` salen
+negras. Por eso Gemini (`com.google.android.googlequicksearchbox` +
+`com.google.android.apps.bard`) está en la lista qcom; si aún así sale negra al
+abrirla justo tras MIUICamera, es el parpadeo del reinicio del provider — se
+recupera sola en 2-3 s. (Nota: la preview de Gemini es SurfaceView; un screenshot
+sale negro aunque funcione — comprueba con la foto guardada, no con captura.) ⚠️ Cambiar de familia reinicia el camera-provider (~2-3 s) y mata la app
 que se abre: al **alternar** entre MIUICamera y MGC la 1ª apertura falla, reabres y
 va; dentro de la misma app, sin problema. Desactívalo (KSU manager o
 `touch .../disable`) para quedarte solo en `xiaomi`.
