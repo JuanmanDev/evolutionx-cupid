@@ -13,6 +13,7 @@ desde la raíz del árbol, y son **idempotentes** (se pueden volver a pasar).
 | `fix_active_full.py` | Arregla un uso-tras-liberar en el anterior (los punteros de `find()` se invalidan al hacer `update()`). |
 | `lee_remosaictype.py` | Diagnóstico: lee del `sensormodule` la región `CrossTalk` del EEPROM (sale a tamaño 0: por eso el 50 MP tiene tinte). |
 | `notas_50mp.py` | Cierra en las notas las medidas de los tres caminos de 50 MP. |
+| `parche_volumen_getindex.py` | `AudioService.getIndex()`: para el dispositivo DEFAULT o no configurado, devuelve el índice del altavoz (el del slider) en vez del DEFAULT congelado. Arregla notificaciones ocasionalmente altas y multimedia con pantalla apagada. 100% ROM, sin KernelSU. |
 
 ## Sobre `parche_active_full.py` (GCam a 50 MP): probado y descartado
 

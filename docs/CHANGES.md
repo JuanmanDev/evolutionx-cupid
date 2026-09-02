@@ -28,7 +28,9 @@ full detail with measurements is in [`NOTES.md`](NOTES.md). *(Spanish:
 | File | Change |
 |---|---|
 | `frameworks/av/.../audio_policy_volumes.xml` | Notification/ringtone speaker volume curve: low end reaches −50 dB instead of −29.7. |
+| `frameworks/base/.../audio/AudioService.java` | `VolumeStreamState.getIndex()`: for the DEFAULT/unconfigured output device, return the **speaker** index (the one the slider controls) instead of the frozen DEFAULT index. Fixes occasional loud notifications and inconsistent media with screen off. See `patches/parche_volumen_getindex.py` and `NOTES.md`. |
 | `frameworks/av/.../CameraProviderManager.{cpp,h}` | New `addQuadCfaFullSizeJpeg()`: advertises the full sensor size as a photo size. **Off by default** (`persist.sys.camera.qcfa_jpeg`), since with it on, apps that reserve several buffers kill the HAL. |
+| `frameworks/av/.../CameraProviderManager.{cpp,h}` | `fixGcamAuxRawMismatch()`: caps the aux cameras' full-res RAW configs to the active array → fixes the GCam crash when enumerating the front camera. Gated `persist.sys.camera.gcam_aux_fix` (1 by default). |
 | `frameworks/av/.../Camera3Device.cpp` | `tagFullSizeQuadCfaRequestLocked()`: switches the session to the `0x80F3` mode and injects `xiaomi.remosaic.enabled` for full-size JPEG requests — the real 50 MP path. |
 | `frameworks/av/.../{Aidl,Hidl}ProviderInfo.cpp` | Call the functions above. |
 

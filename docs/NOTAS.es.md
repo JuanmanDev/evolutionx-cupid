@@ -268,3 +268,60 @@ sobrescribe. Tras cada actualizacion habria que rehacer:
 
 Y recordar que /vendor, /system_ext y /odm estan al 100 % de ocupacion: cualquier
 cambio ahi obliga a reconstruir la imagen entera, no se puede editar en caliente.
+
+## Volumen: notificaciones altas y multimedia con pantalla apagada (arreglado, 2-sep-2026)
+
+Sintoma: la notificacion a veces sonaba mas alta que el minimo puesto en Ajustes;
+la musica con pantalla apagada, a veces bien y a veces no. **No era Dolby**
+(`vendor.audio.dolby.ds2.enabled=false`).
+
+Android guarda el volumen POR DISPOSITIVO DE SALIDA (mIndexMap en cada
+`VolumeStreamState`). En `dumpsys audio` se ve, p.ej. para NOTIFICATION:
+
+    Current: 2 (speaker): 1, 40000000 (default): 7
+
+El indice del dispositivo **AUDIO_DEVICE_OUT_DEFAULT (0x40000000)** es el fallback
+que se usa cuando la ruta aun no esta resuelta (cold-path/transitorio). Medido:
+ese indice **no es controlable por los ajustes**. El bucle de `readSettings`
+itera `DEVICE_OUT_ALL_SET`, que **no incluye DEFAULT**; el indice DEFAULT se fija
+en construccion a `DEFAULT_STREAM_VOLUME[]` (`AudioSystem.java`: music=5,
+ring/notif=5->7 por config) y solo cambia con `cmd audio set-device-volume`.
+Comprobado a lo bestia: puse `volume_music` (base) y `volume_music_speaker`
+distintos y reinicie -> el default no siguio a ninguno, se quedo congelado.
+
+Por eso, cuando algo suena por ese fallback, sale al nivel fijo (5/7) y no al que
+tiene el usuario en el altavoz. Encaja con "a veces mas alto/mas bajo".
+
+Un primer parche (mirror speaker->default en `setIndex`, y en `readSettings`) NO
+bastaba: el `readSettings` no toca el DEFAULT. El arreglo bueno esta en
+`VolumeStreamState.getIndex(int device)`: cuando el dispositivo no esta
+configurado (`index==-1`) O es DEFAULT, devolver el indice del
+**DEVICE_OUT_SPEAKER** (el del slider) en vez del DEFAULT congelado. Cambia el
+valor DEVUELTO, no el almacenado (por eso `dumpsys` sigue mostrando `default:5`).
+BT y auriculares tienen indice propio -> no se tocan. Ver
+`patches/parche_volumen_getindex.py`. 100% en la ROM, sin KernelSU.
+
+(Historico: durante la investigacion se uso un modulo KernelSU `audio_volfix` que
+bajaba el DEFAULT con `cmd audio set-device-volume ... 1073741824` en cada
+arranque. Fue lo que dejo bajos los defaults de ring/notif un tiempo. Sustituido
+por el fix de ROM y **eliminado**.)
+
+## Eco en llamada: la proximidad es del DSP, no de un lib de userspace (2-sep-2026)
+
+El movil NO tiene sensor de proximidad fisico: es virtual ultrasonico (Elliptic
+Labs). Con eco en llamada que se arregla al alejar/acercar el movil, se penso en
+un `libelliptic_engine.so` que faltaba. Medido en el movil, esa premisa es FALSA:
+
+  - `readelf -d sensors.ultrasoundproximity.so` -> enlaza `libssc.so` /
+    `sensors.ssc.so`, **no** `libelliptic_engine`.
+  - `grep -rl libelliptic_engine /vendor /system` -> solo el propio fichero. Nada
+    lo carga. El motor ultrasonico real corre en el **DSP/ADSP (SLPI)** por
+    FastRPC (`adsprpcd`). El `.so` de userspace es inerte.
+  - La **calibracion ya existe y es valida**: `/mnt/vendor/persist/audio/us_cal_v2.txt`.
+    El sensor `android.sensor.proximity` se registra bien.
+
+Conclusion: el eco es de **audio (ruteo/AEC en llamada)**, no un lib que falte.
+Para diagnosticarlo hace falta una llamada real capturando `logcat -b all` y
+`dumpsys audio` durante el eco. Encaja con la nota vieja de la calibracion
+`Forte_elus`: el AEC depende de esa calibracion; el trabajo pendiente sigue siendo
+la seleccion automatica de calibracion para poder compartir la ROM sin eco.

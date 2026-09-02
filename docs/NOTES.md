@@ -51,3 +51,37 @@ The dynamic `/system` (dm-2) shipped at 100%. Writing a slightly larger
 `cameraserver` failed until the ext4 was grown into the ~20 MB of unused space in
 its device-mapper block: `resize2fs /dev/block/dm-2` (verity is off, so /system is
 writable). Kept here because it bit hard during development.
+
+## Volume: loud notifications and inconsistent screen-off media (fixed, 2026-09-02)
+
+Symptom: notifications sometimes louder than the minimum set in Settings; media
+with the screen off sometimes fine, sometimes not. **Not Dolby**
+(`vendor.audio.dolby.ds2.enabled=false`).
+
+Android stores volume PER OUTPUT DEVICE (mIndexMap in each `VolumeStreamState`).
+`dumpsys audio`, e.g. NOTIFICATION: `speaker: 1, default (0x40000000): 7`. The
+**AUDIO_DEVICE_OUT_DEFAULT** index is the fallback used before the route settles
+(cold path). Measured: that index is **not controllable from Settings** —
+`readSettings` iterates `DEVICE_OUT_ALL_SET`, which does not include DEFAULT; the
+DEFAULT index is set at construction to `DEFAULT_STREAM_VOLUME[]` (music=5,
+ring/notif=7) and only changes via `cmd audio set-device-volume`. Proven by
+setting base and speaker settings to different values and rebooting: the default
+stayed frozen.
+
+Fix in `VolumeStreamState.getIndex(int device)`: for the DEFAULT/unconfigured
+device, return the **DEVICE_OUT_SPEAKER** index (the one the slider controls)
+instead of the frozen DEFAULT. Changes the returned value, not the stored one
+(`dumpsys` still shows `default:5`). BT/headsets have their own index → untouched.
+See `patches/parche_volumen_getindex.py`. 100% in-ROM, no KernelSU.
+
+## Call echo: proximity lives in the DSP, not a userspace lib (2026-09-02)
+
+The phone has no physical proximity sensor — it is virtual ultrasonic (Elliptic
+Labs). The "missing `libelliptic_engine.so`" theory is FALSE (measured):
+`sensors.ultrasoundproximity.so` links `libssc.so`/`sensors.ssc.so`, not
+libelliptic; nothing on the device loads `libelliptic_engine.so`; the real engine
+runs on the **DSP/ADSP (SLPI)** over FastRPC (`adsprpcd`); the calibration already
+exists (`/mnt/vendor/persist/audio/us_cal_v2.txt`) and proximity registers fine.
+So the echo is an **audio (routing/AEC) issue**, needing a live-call `logcat -b all`
++ `dumpsys audio` to diagnose. Ties into the pending `Forte_elus` audio-calibration
+auto-selection work.

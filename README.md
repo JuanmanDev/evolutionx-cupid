@@ -49,6 +49,8 @@ first open glitches — just reopen. Full commands in the v2 release notes.
 | Correct audio calibration (`Forte_elus`) | The audio HAL always opens `acdbdata/Forte/Forte_acdb_cal.acdb`. This unit needs the `elus` set; loading the generic one leaves the DSP without data (`No calibration found`) and **without echo cancellation** — the person on the other end hears themselves. |
 | 15 volume steps for notifications and ringtone | They shipped with 7 (media has 15), so the lowest step was already loud. |
 | Lower volume curve for notifications and ringtone | Their curve started at −29.7 dB while media starts at −58 dB. The first step now lands around −45 dB instead of −26 dB. Maximum volume is unchanged. |
+| DEFAULT-device volume fix (`AudioService.getIndex`) | The DEFAULT output-device index was frozen (Settings can't change it), making notifications occasionally loud and screen-off media inconsistent. The fallback now uses the speaker level. See `docs/NOTES.md` and `patches/parche_volumen_getindex.py`. |
+| Per-lens camera guide | Which app to use for each lens (real ultra-wide in Google Camera via MGC+qcom, macro via Supermacro, HAL auto-switch). See `docs/CAMERAS.md`. |
 | `ro.debuggable=0` | The build presents itself as a user build with release-keys; shipping `ro.debuggable=1` on top of that is detected by Play Integrity and banking apps, and costs performance. |
 | Root from KernelSU | Root comes from KernelSU-Next (v3.0.1 + SuSFS), built into the kernel. Its `su` lives at `/system/bin/su` and is visible to apps — hide it per-app with the KernelSU denylist; see "Known limits". |
 | 50 MP camera app (`Cam50Test`) | The only way to get real full-sensor stills on this device (see below). |

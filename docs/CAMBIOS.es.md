@@ -28,7 +28,9 @@ detalle completo, con las medidas, está en `NOTAS.md`.
 | Fichero | Cambio |
 |---|---|
 | `frameworks/av/.../audio_policy_volumes.xml` | Curva de volumen de notificación y timbre por altavoz: el tramo bajo llega a −50 dB en vez de −29,7. |
+| `frameworks/base/.../audio/AudioService.java` | `VolumeStreamState.getIndex()`: para el dispositivo DEFAULT o no configurado, devuelve el índice del **altavoz** (el que controla el slider) en vez del DEFAULT congelado. Arregla notificaciones ocasionalmente altas y multimedia con pantalla apagada. Ver `patches/parche_volumen_getindex.py` y `NOTAS.md`. |
 | `frameworks/av/.../CameraProviderManager.{cpp,h}` | Función nueva `addQuadCfaFullSizeJpeg()`: anuncia el tamaño completo del sensor como tamaño de foto. **Apagada por defecto** (`persist.sys.camera.qcfa_jpeg`), porque con ella las apps que reservan varios búferes tumban el HAL. |
+| `frameworks/av/.../CameraProviderManager.{cpp,h}` | Función `fixGcamAuxRawMismatch()`: capa el RAW full-res de las cámaras auxiliares al área activa → arregla el crash de GCam al enumerar la frontal. Gated `persist.sys.camera.gcam_aux_fix` (1 por defecto). |
 | `frameworks/av/.../{Aidl,Hidl}ProviderInfo.cpp` | Llamada a la función anterior. |
 
 ## Fuera del árbol (viven en el móvil)
