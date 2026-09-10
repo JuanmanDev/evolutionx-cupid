@@ -26,12 +26,25 @@ tiempo libre. Sin ese trabajo previo no habría por dónde empezar.
 the `cupid`/`sm8450` device, vendor and kernel trees this builds on are their work,
 often unpaid and in their free time. None of this starts without them.*
 
-## Root y ocultación
+## Fuente del kernel · Kernel source (GPLv2)
+
+Cumplimiento GPLv2 — código fuente del kernel usado para compilar esta ROM/kernel:
+· *GPLv2 compliance — kernel source used to build this ROM/kernel:*
+
+- **Kernel usado · Kernel used:** [`Evolution-X-Devices/kernel_xiaomi_sm8450`](https://github.com/Evolution-X-Devices/kernel_xiaomi_sm8450/tree/bka-ksun) — rama/branch **`bka-ksun`** (integra KernelSU-Next · integrates KernelSU-Next).
+- **Base del kernel · Kernel base:** [`cupid-development/android_kernel_xiaomi_sm8450`](https://github.com/cupid-development/android_kernel_xiaomi_sm8450) — derivado del código GPL oficial de Xiaomi para cupid/sm8450 + Qualcomm CLO/CAF · *derived from Xiaomi's official GPL kernel source for cupid/sm8450 + Qualcomm CLO/CAF.*
+- **Módulos y devicetrees · Kernel modules & devicetrees:** [`kernel_xiaomi_sm8450-modules`](https://github.com/Evolution-X-Devices/kernel_xiaomi_sm8450-modules) · [`kernel_xiaomi_sm8450-devicetrees`](https://github.com/Evolution-X-Devices/kernel_xiaomi_sm8450-devicetrees) (rama/branch `bka`).
+- **Device trees:** [`device_xiaomi_cupid`](https://github.com/Evolution-X-Devices/device_xiaomi_cupid) · [`device_xiaomi_sm8450-common`](https://github.com/Evolution-X-Devices/device_xiaomi_sm8450-common) (rama/branch `bka`).
+- **Blobs de vendor · Vendor blobs:** [`TheMuppets/proprietary_vendor_xiaomi_cupid`](https://github.com/TheMuppets/proprietary_vendor_xiaomi_cupid) (lineage-23.2) · [`vendor_xiaomi_sm8450-common`](https://github.com/Evolution-X-Devices/vendor_xiaomi_sm8450-common) (bka).
+- **Port de cámara MIUI · MIUI camera port:** [`AviumUI-Devices/device_xiaomi_miuicamera-cupid`](https://github.com/AviumUI-Devices/device_xiaomi_miuicamera-cupid) · [`vendor_xiaomi_miuicamera-cupid`](https://github.com/AviumUI-Devices/vendor_xiaomi_miuicamera-cupid) (avium-16.2).
+- **Upstream:** Xiaomi (código GPL del kernel · GPL kernel source), Qualcomm / CLO (CAF), LineageOS, Google / AOSP.
+
+## Root y ocultación · Root & hiding
 
 - **[KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next)** — el root
-  integrado en el kernel.
+  integrado en el kernel. · *the root integrated in the kernel.*
 - **[SuSFS](https://gitlab.com/simonpunk/susfs4ksu)** — la base para ocultar el
-  root a las apps que lo detectan.
+  root a las apps que lo detectan. · *the base for hiding root from apps that detect it.*
 
 ## Base de dispositivo
 
