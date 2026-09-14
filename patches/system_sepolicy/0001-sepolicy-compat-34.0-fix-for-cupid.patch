@@ -1,0 +1,28 @@
+From d2ab365c9422c6d2be6d9512e6e2247da5c4ff52 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:31 +0200
+Subject: [PATCH] sepolicy: compat 34.0 fix for cupid
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     private/compat/34.0/34.0.cil | 2 +-
+     1 file changed, 1 insertion(+), 1 deletion(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ private/compat/34.0/34.0.cil | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/private/compat/34.0/34.0.cil b/private/compat/34.0/34.0.cil
+index b42ad66aa..d85d15ff2 100644
+--- a/private/compat/34.0/34.0.cil
++++ b/private/compat/34.0/34.0.cil
+@@ -2720,4 +2720,4 @@
+ (typeattributeset zygote_exec_34_0 (zygote_exec))
+ (typeattributeset zygote_socket_34_0 (zygote_socket))
+ (typeattributeset zygote_tmpfs_34_0 (zygote_tmpfs))
+-(typeattributeset mosey_app_34_0 (mosey_app))
++(typeattributeset mosey_app_34_0 (untrusted_app))
+-- 
+2.43.0
+

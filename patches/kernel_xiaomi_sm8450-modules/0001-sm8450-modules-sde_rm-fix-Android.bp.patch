@@ -1,0 +1,43 @@
+From e40448b8fe6d3c8f80c77195fd7ec52af7718def Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:28 +0200
+Subject: [PATCH] sm8450-modules: sde_rm fix, Android.bp
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     Android.bp                                       | 2 ++
+     qcom/opensource/display-drivers/msm/sde/sde_rm.c | 2 +-
+     2 files changed, 3 insertions(+), 1 deletion(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ Android.bp                                       | 2 ++
+ qcom/opensource/display-drivers/msm/sde/sde_rm.c | 2 +-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Android.bp b/Android.bp
+index a0add954d3..5d01fdf976 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -1,3 +1,5 @@
+ soong_namespace {
+     imports: ["kernel/xiaomi/sm8450"]
+ }
++
++
+diff --git a/qcom/opensource/display-drivers/msm/sde/sde_rm.c b/qcom/opensource/display-drivers/msm/sde/sde_rm.c
+index dd20d770c0..22701a362c 100644
+--- a/qcom/opensource/display-drivers/msm/sde/sde_rm.c
++++ b/qcom/opensource/display-drivers/msm/sde/sde_rm.c
+@@ -1112,7 +1112,7 @@ static bool _sde_rm_check_lm_and_get_connected_blks(
+ 		u32 conn_lm_mask)
+ {
+ 	const struct sde_lm_cfg *lm_cfg = to_sde_hw_mixer(lm->hw)->cap;
+-	const struct sde_pingpong_cfg *pp_cfg;
++	const struct sde_pingpong_cfg *pp_cfg = NULL;
+ 	bool ret, is_conn_primary, is_conn_secondary;
+ 	u32 lm_primary_pref, lm_secondary_pref, cwb_pref, dcwb_pref;
+ 
+-- 
+2.43.0
+

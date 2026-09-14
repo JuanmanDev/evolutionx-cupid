@@ -1,0 +1,239 @@
+From a555976aea13ea4834be337b3c8f6c13a6f8d8ca Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:31 +0200
+Subject: [PATCH] sepolicy: cupid HAL domain rules
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     common/dynamic/hal_lineage_health.te            |  2 ++
+     common/dynamic/hal_lineage_livedisplay.te       |  2 ++
+     common/dynamic/hal_lineage_powershare.te        |  2 ++
+     common/dynamic/hal_lineage_touch.te             |  2 ++
+     common/vendor/hal_lineage_health_default.te     |  8 ++++++++
+     common/vendor/hal_lineage_livedisplay_sysfs.te  |  8 ++++++++
+     common/vendor/hal_lineage_powershare_default.te |  8 ++++++++
+     common/vendor/hal_lineage_touch_default.te      |  8 ++++++++
+     qcom/dynamic/hal_lineage_livedisplay_sysfs.te   |  3 +++
+     qcom/vendor/fm_app.te                           |  2 ++
+     qcom/vendor/hal_gnss_qti.te                     |  2 ++
+     qcom/vendor/hal_lineage_health_default.te       |  9 +++++++--
+     qcom/vendor/hal_lineage_livedisplay_qti.te      |  8 ++++++++
+     qcom/vendor/hal_perf_default.te                 |  3 ++-
+     qcom/vendor/hal_power_default.te                | 15 ++++++++++-----
+     15 files changed, 74 insertions(+), 8 deletions(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ common/dynamic/hal_lineage_health.te            |  2 ++
+ common/dynamic/hal_lineage_livedisplay.te       |  2 ++
+ common/dynamic/hal_lineage_powershare.te        |  2 ++
+ common/dynamic/hal_lineage_touch.te             |  2 ++
+ common/vendor/hal_lineage_health_default.te     |  8 ++++++++
+ common/vendor/hal_lineage_livedisplay_sysfs.te  |  8 ++++++++
+ common/vendor/hal_lineage_powershare_default.te |  8 ++++++++
+ common/vendor/hal_lineage_touch_default.te      |  8 ++++++++
+ qcom/dynamic/hal_lineage_livedisplay_sysfs.te   |  3 +++
+ qcom/vendor/fm_app.te                           |  2 ++
+ qcom/vendor/hal_gnss_qti.te                     |  2 ++
+ qcom/vendor/hal_lineage_health_default.te       |  9 +++++++--
+ qcom/vendor/hal_lineage_livedisplay_qti.te      |  8 ++++++++
+ qcom/vendor/hal_perf_default.te                 |  3 ++-
+ qcom/vendor/hal_power_default.te                | 15 ++++++++++-----
+ 15 files changed, 74 insertions(+), 8 deletions(-)
+
+diff --git a/common/dynamic/hal_lineage_health.te b/common/dynamic/hal_lineage_health.te
+index 2f6ba2a..9fee022 100644
+--- a/common/dynamic/hal_lineage_health.te
++++ b/common/dynamic/hal_lineage_health.te
+@@ -1,3 +1,5 @@
++hal_attribute(hal_lineage_health);
++
+ # HwBinder IPC from client to server
+ binder_call(hal_lineage_health_client, hal_lineage_health_server)
+ 
+diff --git a/common/dynamic/hal_lineage_livedisplay.te b/common/dynamic/hal_lineage_livedisplay.te
+index 90a5ad5..baca323 100644
+--- a/common/dynamic/hal_lineage_livedisplay.te
++++ b/common/dynamic/hal_lineage_livedisplay.te
+@@ -1,3 +1,5 @@
++hal_attribute(hal_lineage_livedisplay);
++
+ # HwBinder IPC from client to server
+ binder_call(hal_lineage_livedisplay_client, hal_lineage_livedisplay_server)
+ 
+diff --git a/common/dynamic/hal_lineage_powershare.te b/common/dynamic/hal_lineage_powershare.te
+index 1128694..995284f 100644
+--- a/common/dynamic/hal_lineage_powershare.te
++++ b/common/dynamic/hal_lineage_powershare.te
+@@ -1,3 +1,5 @@
++hal_attribute(hal_lineage_powershare);
++
+ # HwBinder IPC from client to server
+ binder_call(hal_lineage_powershare_client, hal_lineage_powershare_server)
+ 
+diff --git a/common/dynamic/hal_lineage_touch.te b/common/dynamic/hal_lineage_touch.te
+index 1dd5ea9..e05e6b0 100644
+--- a/common/dynamic/hal_lineage_touch.te
++++ b/common/dynamic/hal_lineage_touch.te
+@@ -1,3 +1,5 @@
++hal_attribute(hal_lineage_touch);
++
+ # HwBinder IPC from client to server
+ binder_call(hal_lineage_touch_client, hal_lineage_touch_server)
+ 
+diff --git a/common/vendor/hal_lineage_health_default.te b/common/vendor/hal_lineage_health_default.te
+index d3b7c16..6b42d62 100644
+--- a/common/vendor/hal_lineage_health_default.te
++++ b/common/vendor/hal_lineage_health_default.te
+@@ -1,3 +1,11 @@
++# Estos atributos ya los declara common/public/attributes con
++# hal_attribute_lineage(...), que tambien entra en la politica de vendor.
++# Declararlos aqui hace que checkpolicy aborte con "Duplicate declaration
++# of type". Se dejan comentados: la fuente unica es common/public.
++# attribute hal_lineage_health;
++# attribute hal_lineage_health_client;
++# attribute hal_lineage_health_server;
++
+ type hal_lineage_health_default, domain;
+ hal_server_domain(hal_lineage_health_default, hal_lineage_health)
+ 
+diff --git a/common/vendor/hal_lineage_livedisplay_sysfs.te b/common/vendor/hal_lineage_livedisplay_sysfs.te
+index 98ef45e..3ff4529 100644
+--- a/common/vendor/hal_lineage_livedisplay_sysfs.te
++++ b/common/vendor/hal_lineage_livedisplay_sysfs.te
+@@ -1,3 +1,11 @@
++# Estos atributos ya los declara common/public/attributes con
++# hal_attribute_lineage(...), que tambien entra en la politica de vendor.
++# Declararlos aqui hace que checkpolicy aborte con "Duplicate declaration
++# of type". Se dejan comentados: la fuente unica es common/public.
++# attribute hal_lineage_livedisplay;
++# attribute hal_lineage_livedisplay_client;
++# attribute hal_lineage_livedisplay_server;
++
+ type hal_lineage_livedisplay_sysfs, domain;
+ hal_server_domain(hal_lineage_livedisplay_sysfs, hal_lineage_livedisplay)
+ 
+diff --git a/common/vendor/hal_lineage_powershare_default.te b/common/vendor/hal_lineage_powershare_default.te
+index bcf0d5f..ecdad01 100644
+--- a/common/vendor/hal_lineage_powershare_default.te
++++ b/common/vendor/hal_lineage_powershare_default.te
+@@ -1,3 +1,11 @@
++# Estos atributos ya los declara common/public/attributes con
++# hal_attribute_lineage(...), que tambien entra en la politica de vendor.
++# Declararlos aqui hace que checkpolicy aborte con "Duplicate declaration
++# of type". Se dejan comentados: la fuente unica es common/public.
++# attribute hal_lineage_powershare;
++# attribute hal_lineage_powershare_client;
++# attribute hal_lineage_powershare_server;
++
+ type hal_lineage_powershare_default, domain;
+ hal_server_domain(hal_lineage_powershare_default, hal_lineage_powershare)
+ 
+diff --git a/common/vendor/hal_lineage_touch_default.te b/common/vendor/hal_lineage_touch_default.te
+index c5d9a89..5105bae 100644
+--- a/common/vendor/hal_lineage_touch_default.te
++++ b/common/vendor/hal_lineage_touch_default.te
+@@ -1,3 +1,11 @@
++# Estos atributos ya los declara common/public/attributes con
++# hal_attribute_lineage(...), que tambien entra en la politica de vendor.
++# Declararlos aqui hace que checkpolicy aborte con "Duplicate declaration
++# of type". Se dejan comentados: la fuente unica es common/public.
++# attribute hal_lineage_touch;
++# attribute hal_lineage_touch_client;
++# attribute hal_lineage_touch_server;
++
+ type hal_lineage_touch_default, domain;
+ hal_server_domain(hal_lineage_touch_default, hal_lineage_touch)
+ 
+diff --git a/qcom/dynamic/hal_lineage_livedisplay_sysfs.te b/qcom/dynamic/hal_lineage_livedisplay_sysfs.te
+index f3995d2..621da20 100644
+--- a/qcom/dynamic/hal_lineage_livedisplay_sysfs.te
++++ b/qcom/dynamic/hal_lineage_livedisplay_sysfs.te
+@@ -1,3 +1,6 @@
++# Declarado en common/dynamic/file.te (ver BoardConfigCommon.mk).
++# Declarado en common/vendor/hal_lineage_livedisplay_sysfs.te.
++
+ # Allow LiveDisplay to access vendor display property
+ get_prop(hal_lineage_livedisplay_sysfs, vendor_display_prop)
+ 
+diff --git a/qcom/vendor/fm_app.te b/qcom/vendor/fm_app.te
+index c37e8f5..10ebae1 100644
+--- a/qcom/vendor/fm_app.te
++++ b/qcom/vendor/fm_app.te
+@@ -1 +1,3 @@
++# Declarada en common/vendor/property.te (fuente unica).
++# vendor_public_prop(vendor_fm_radio_app_prop)
+ get_prop(vendor_fm_app, vendor_fm_radio_app_prop)
+diff --git a/qcom/vendor/hal_gnss_qti.te b/qcom/vendor/hal_gnss_qti.te
+index 4e914a2..e8aedf7 100644
+--- a/qcom/vendor/hal_gnss_qti.te
++++ b/qcom/vendor/hal_gnss_qti.te
+@@ -1,2 +1,4 @@
++# Declarada en common/public/property.te como system_restricted_prop, que es la
++# que usa common/private/system_server.te para escribirla.
+ # xtra-daemon control
+ dontaudit hal_gnss_qti xtra_control_prop:file r_file_perms;
+diff --git a/qcom/vendor/hal_lineage_health_default.te b/qcom/vendor/hal_lineage_health_default.te
+index 26de236..21cba9e 100644
+--- a/qcom/vendor/hal_lineage_health_default.te
++++ b/qcom/vendor/hal_lineage_health_default.te
+@@ -1,2 +1,7 @@
+-rw_dir_file(hal_lineage_health_default, sysfs_battery_supply)
+-rw_dir_file(hal_lineage_health_default, sysfs_usb_supply)
++# Declarado en device/lineage/sepolicy/common/vendor/hal_lineage_health_default.te,
++# que ahora si se compila (ver device/xiaomi/sm8450-common/BoardConfigCommon.mk).
++# Duplicarlo aqui rompe checkpolicy: Duplicate declaration of type.
++allow hal_lineage_health_default sysfs_battery_supply:dir r_dir_perms;
++allow hal_lineage_health_default sysfs_battery_supply:file rw_file_perms;
++allow hal_lineage_health_default sysfs_usb_supply:dir r_dir_perms;
++allow hal_lineage_health_default sysfs_usb_supply:file rw_file_perms;
+diff --git a/qcom/vendor/hal_lineage_livedisplay_qti.te b/qcom/vendor/hal_lineage_livedisplay_qti.te
+index 4950726..0fd6035 100644
+--- a/qcom/vendor/hal_lineage_livedisplay_qti.te
++++ b/qcom/vendor/hal_lineage_livedisplay_qti.te
+@@ -1,3 +1,11 @@
++# Estos atributos ya los declara common/public/attributes con
++# hal_attribute_lineage(...), que tambien entra en la politica de vendor.
++# Declararlos aqui hace que checkpolicy aborte con "Duplicate declaration
++# of type". Se dejan comentados: la fuente unica es common/public.
++# attribute hal_lineage_livedisplay;
++# attribute hal_lineage_livedisplay_client;
++# attribute hal_lineage_livedisplay_server;
++
+ type hal_lineage_livedisplay_qti, domain;
+ hal_server_domain(hal_lineage_livedisplay_qti, hal_lineage_livedisplay)
+ 
+diff --git a/qcom/vendor/hal_perf_default.te b/qcom/vendor/hal_perf_default.te
+index 9125357..e1e63e2 100644
+--- a/qcom/vendor/hal_perf_default.te
++++ b/qcom/vendor/hal_perf_default.te
+@@ -1,3 +1,4 @@
+ r_dir_file(hal_perf_default, hal_power_default)
+ 
+-rw_dir_file(hal_perf_default, proc_sched)
++allow hal_perf_default proc_sched:dir r_dir_perms;
++allow hal_perf_default proc_sched:file rw_file_perms;
+diff --git a/qcom/vendor/hal_power_default.te b/qcom/vendor/hal_power_default.te
+index 969819c..a3e22f9 100644
+--- a/qcom/vendor/hal_power_default.te
++++ b/qcom/vendor/hal_power_default.te
+@@ -1,6 +1,11 @@
+ # To do powerhint on nodes defined in powerhint.json
+-rw_dir_file(hal_power_default, proc_sched)
+-rw_dir_file(hal_power_default, sysfs_devfreq)
+-rw_dir_file(hal_power_default, sysfs_graphics)
+-rw_dir_file(hal_power_default, sysfs_kgsl)
+-rw_dir_file(hal_power_default, sysfs_scsi_host)
++allow hal_power_default proc_sched:dir r_dir_perms;
++allow hal_power_default proc_sched:file rw_file_perms;
++allow hal_power_default sysfs_devfreq:dir r_dir_perms;
++allow hal_power_default sysfs_devfreq:file rw_file_perms;
++allow hal_power_default sysfs_graphics:dir r_dir_perms;
++allow hal_power_default sysfs_graphics:file rw_file_perms;
++allow hal_power_default sysfs_kgsl:dir r_dir_perms;
++allow hal_power_default sysfs_kgsl:file rw_file_perms;
++allow hal_power_default sysfs_scsi_host:dir r_dir_perms;
++allow hal_power_default sysfs_scsi_host:file rw_file_perms;
+-- 
+2.43.0
+

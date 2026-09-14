@@ -1,0 +1,54 @@
+From ddf1359531e428049e09114c94789fe05237888e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:32 +0200
+Subject: [PATCH] agm: cupid fix
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     service/src/agm.c | 18 ++++++++++++++----
+     1 file changed, 14 insertions(+), 4 deletions(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ service/src/agm.c | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/service/src/agm.c b/service/src/agm.c
+index 23f15f99..557eda8d 100644
+--- a/service/src/agm.c
++++ b/service/src/agm.c
+@@ -69,6 +69,7 @@
+ #include <stdbool.h>
+ #include <pthread.h>
+ #include <unistd.h>
++#include <sys/system_properties.h>
+ 
+ #ifdef DYNAMIC_LOG_ENABLED
+ #include <log_xml_parser.h>
+@@ -122,10 +123,19 @@ int agm_init()
+     param.sched_priority = SCHED_FIFO;
+     pthread_attr_setschedparam (&tattr, &param);
+ 
+-    ret = pthread_create(&ats_thread, (const pthread_attr_t *) &tattr,
+-                                           ats_init_thread, NULL);
+-    if (ret)
+-        AGM_LOGE(" ats init thread creation failed\n");
++    {
++        char ats_prop[PROP_VALUE_MAX] = "0";
++        __system_property_get("persist.vendor.audio.ats.enable", ats_prop);
++        if (ats_prop[0] == '1' || ats_prop[0] == 't') {
++            ret = pthread_create(&ats_thread, (const pthread_attr_t *) &tattr,
++                                               ats_init_thread, NULL);
++            if (ret)
++                AGM_LOGE(" ats init thread creation failed\n");
++        } else {
++            AGM_LOGI("ATS disabled by default (prebuilt libmcs vs source osal crash fix)");
++            (void)ats_thread; (void)tattr; (void)param;
++        }
++    }
+ 
+     ret = session_obj_init();
+     if (0 != ret) {
+-- 
+2.43.0
+

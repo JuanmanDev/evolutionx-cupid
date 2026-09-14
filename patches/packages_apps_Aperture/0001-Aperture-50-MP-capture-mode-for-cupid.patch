@@ -1,0 +1,804 @@
+From 3387450ed963d38bc1e8f6fdb0a66eb35eb3d6c5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:30 +0200
+Subject: [PATCH] Aperture: 50 MP capture mode for cupid
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     app/Android.bp                                             |   5 +-
+     app/src/main/AndroidManifest.xml                           |   8 +
+     app/src/main/java/org/lineageos/aperture/Actividad50Mp.kt  |  96 ++++++
+     app/src/main/java/org/lineageos/aperture/CameraActivity.kt |  31 +-
+     app/src/main/java/org/lineageos/aperture/utils/Foto50Mp.kt | 527 +++++++++++++++++++++++++++++++++
+     app/src/main/res/values-es/strings.xml                     |   4 +
+     app/src/main/res/values/strings.xml                        |   4 +
+     app/src/main/res/xml/root_preferences.xml                  |   7 +
+     8 files changed, 680 insertions(+), 2 deletions(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ app/Android.bp                                |   5 +-
+ app/src/main/AndroidManifest.xml              |   8 +
+ .../org/lineageos/aperture/Actividad50Mp.kt   |  96 ++++
+ .../org/lineageos/aperture/CameraActivity.kt  |  31 +-
+ .../org/lineageos/aperture/utils/Foto50Mp.kt  | 527 ++++++++++++++++++
+ app/src/main/res/values-es/strings.xml        |   4 +
+ app/src/main/res/values/strings.xml           |   4 +
+ app/src/main/res/xml/root_preferences.xml     |   7 +
+ 8 files changed, 680 insertions(+), 2 deletions(-)
+ create mode 100644 app/src/main/java/org/lineageos/aperture/Actividad50Mp.kt
+ create mode 100644 app/src/main/java/org/lineageos/aperture/utils/Foto50Mp.kt
+
+diff --git a/app/Android.bp b/app/Android.bp
+index b24f014..b183e9f 100644
+--- a/app/Android.bp
++++ b/app/Android.bp
+@@ -14,7 +14,10 @@ android_app {
+     resource_dirs: ["src/main/res"],
+     manifest: "src/main/AndroidManifest.xml",
+ 
+-    sdk_version: "36",
++    // APIs de sistema: hacen falta para createCustomCaptureSession, que es
++    // la unica forma de pedir la foto al tamano completo del sensor sin que
++    // ese tamano este publicado. Ver utils/Foto50Mp.kt.
++    sdk_version: "system_current",
+     product_specific: true,
+ 
+     overrides: ["Camera2"],
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index 639a85e..e094e37 100644
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -155,6 +155,14 @@
+             android:label="@string/title_activity_settings"
+             android:theme="@style/Theme.SettingsLib" />
+ 
++        <!-- La foto de resolucion completa va en su propia pantalla: dentro
++             de la de la camara habria que soltar CameraX y eso la cierra. -->
++        <activity
++            android:name=".Actividad50Mp"
++            android:exported="false"
++            android:screenOrientation="portrait"
++            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />
++
+     </application>
+ 
+ </manifest>
+diff --git a/app/src/main/java/org/lineageos/aperture/Actividad50Mp.kt b/app/src/main/java/org/lineageos/aperture/Actividad50Mp.kt
+new file mode 100644
+index 0000000..e4bac89
+--- /dev/null
++++ b/app/src/main/java/org/lineageos/aperture/Actividad50Mp.kt
+@@ -0,0 +1,96 @@
++/*
++ * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.aperture
++
++import android.app.Activity
++import android.graphics.Color
++import android.net.Uri
++import android.os.Bundle
++import android.view.Gravity
++import android.view.ViewGroup
++import android.view.WindowManager
++import android.widget.LinearLayout
++import android.widget.ProgressBar
++import android.widget.TextView
++import android.widget.Toast
++import org.lineageos.aperture.utils.Foto50Mp
++
++/**
++ * Pantalla dedicada a la foto de resolucion completa.
++ *
++ * Esto no se puede hacer dentro de la pantalla normal de la camara. Alli hay
++ * que soltar CameraX para dejar la camara libre, y al soltarla esa pantalla se
++ * cierra sola: el sistema congela la aplicacion y la foto, que tarda dos o tres
++ * segundos, se queda esperando una imagen que ya no va a recoger nadie. Ademas,
++ * en cuanto la aplicacion deja de estar a la vista, Android le quita la camara a
++ * media captura:
++ *
++ *     Camera 0: Access for "org.lineageos.aperture" has been restricted,
++ *     isUidVisible 0, procState 18
++ *
++ * Aqui no hay nada que soltar. Esta pantalla no usa CameraX, se queda delante
++ * mientras dura la captura y se cierra cuando termina.
++ */
++class Actividad50Mp : Activity() {
++    private var enMarcha = false
++
++    override fun onCreate(savedInstanceState: Bundle?) {
++        super.onCreate(savedInstanceState)
++
++        // Mientras se hace la foto la pantalla no se apaga: si se apagase, el
++        // sistema dejaria de considerar visible la aplicacion y le retiraria la
++        // camara antes de que llegue la imagen.
++        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
++        setContentView(pantallaDeEspera())
++
++        if (savedInstanceState == null) {
++            hacerLaFoto()
++        }
++    }
++
++    private fun pantallaDeEspera(): ViewGroup {
++        val texto = TextView(this).apply {
++            text = getString(R.string.photo_fifty_mp_working)
++            setTextColor(Color.WHITE)
++            textSize = 16f
++            gravity = Gravity.CENTER
++        }
++        return LinearLayout(this).apply {
++            orientation = LinearLayout.VERTICAL
++            gravity = Gravity.CENTER
++            setBackgroundColor(Color.BLACK)
++            addView(ProgressBar(this@Actividad50Mp))
++            addView(
++                texto,
++                LinearLayout.LayoutParams(
++                    ViewGroup.LayoutParams.WRAP_CONTENT,
++                    ViewGroup.LayoutParams.WRAP_CONTENT
++                ).apply { topMargin = 48 }
++            )
++        }
++    }
++
++    private fun hacerLaFoto() {
++        if (enMarcha) {
++            return
++        }
++        enMarcha = true
++        Foto50Mp(this).capturar { uri -> runOnUiThread { terminar(uri) } }
++    }
++
++    private fun terminar(uri: Uri?) {
++        if (isFinishing || isDestroyed) {
++            return
++        }
++        if (uri == null) {
++            Toast.makeText(
++                this, R.string.photo_fifty_mp_failed, Toast.LENGTH_SHORT
++            ).show()
++        }
++        setResult(if (uri != null) RESULT_OK else RESULT_CANCELED)
++        finish()
++    }
++}
+diff --git a/app/src/main/java/org/lineageos/aperture/CameraActivity.kt b/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
+index edae6e0..7de2064 100644
+--- a/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
++++ b/app/src/main/java/org/lineageos/aperture/CameraActivity.kt
+@@ -535,7 +535,11 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+ 
+             startTimerAndRun {
+                 when (viewModel.cameraMode.value) {
+-                    CameraMode.PHOTO -> viewModel.takePhoto()
++                    CameraMode.PHOTO -> if (fotoDe50MpActivada()) {
++                        hacerFotoDe50Mp()
++                    } else {
++                        viewModel.takePhoto()
++                    }
+                     CameraMode.VIDEO -> viewModel.captureVideo()
+                     else -> {}
+                 }
+@@ -1728,6 +1732,25 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+         )
+     }
+ 
++    /**
++     * Si el disparo tiene que ir por Camera2 en lugar de por CameraX. Ver
++     * [Foto50Mp]: es la unica forma de que el HAL entregue los 50 MP sin
++     * caerse, porque CameraX pide mas imagenes de las que aguanta.
++     */
++    private fun fotoDe50MpActivada() = androidx.preference.PreferenceManager
++        .getDefaultSharedPreferences(this)
++        .getBoolean("photo_fifty_mp", false)
++
++    /**
++     * Abre la pantalla dedicada a la foto de resolucion completa. No se hace
++     * aqui porque para eso habria que soltar CameraX, y al soltarlo esta
++     * pantalla se cierra sola y la captura se queda a medias. Ver
++     * [Actividad50Mp].
++     */
++    private fun hacerFotoDe50Mp() {
++        startActivity(android.content.Intent(this, Actividad50Mp::class.java))
++    }
++
+     private fun openGallery() {
+         lifecycleScope.launch {
+             // secureMediaUris will be cleared if keyguard is unlocked
+@@ -2067,6 +2090,12 @@ open class CameraActivity : AppCompatActivity(R.layout.activity_camera) {
+     }
+ 
+     companion object {
++        /**
++         * Por encima de esto la foto solo sale bien por Camera2. Ver
++         * [org.lineageos.aperture.utils.Foto50Mp].
++         */
++        private const val AREA_SIN_REMOSAICO = 4208L * 3120L
++
+         private val LOG_TAG = CameraActivity::class.simpleName!!
+ 
+         private const val MSG_HIDE_ZOOM_SLIDER = 0
+diff --git a/app/src/main/java/org/lineageos/aperture/utils/Foto50Mp.kt b/app/src/main/java/org/lineageos/aperture/utils/Foto50Mp.kt
+new file mode 100644
+index 0000000..f2d456c
+--- /dev/null
++++ b/app/src/main/java/org/lineageos/aperture/utils/Foto50Mp.kt
+@@ -0,0 +1,527 @@
++/*
++ * SPDX-FileCopyrightText: The LineageOS Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package org.lineageos.aperture.utils
++
++import android.content.ContentValues
++import android.content.Context
++import android.graphics.ImageFormat
++import android.hardware.camera2.CameraCaptureSession
++import android.hardware.camera2.CameraCharacteristics
++import android.hardware.camera2.CameraDevice
++import android.hardware.camera2.CameraManager
++import android.hardware.camera2.CaptureRequest
++import android.hardware.camera2.params.OutputConfiguration
++import android.hardware.camera2.params.SessionConfiguration
++import android.media.ImageReader
++import android.net.Uri
++import android.os.Handler
++import android.os.HandlerThread
++import android.provider.MediaStore
++import android.util.Log
++import java.text.SimpleDateFormat
++import java.util.Date
++import java.util.Locale
++
++/**
++ * Foto a la resolucion completa del sensor (50 MP), por Camera2.
++ *
++ * CameraX no sirve para esto. Reserva cuatro imagenes a la vez y a este tamano
++ * cada una ocupa unos 100 MB de memoria contigua; cuando el HAL intenta mapear
++ * la cuarta se cae y se lleva la camara por delante:
++ *
++ *     [MEMMGR] Import() Failed in importing Gralloc Buffer Handle, WxH 8192x6144
++ *     Camera provider has died
++ *
++ * Ese numero lo decide CameraX por dentro y no se puede cambiar desde la app,
++ * asi que para la foto grande se sale de CameraX y se habla con Camera2 a
++ * pelo, pidiendo una sola imagen. Medido en el movil: con una, dos o tres
++ * funciona; con cuatro, no.
++ *
++ * Del modo de sesion propietario y de la etiqueta de remosaico se encarga el
++ * servicio de camara en cuanto ve una salida JPEG de este tamano, asi que aqui
++ * basta con pedirla.
++ *
++ * Mientras dura la captura no hay vista previa: son un par de segundos, y la
++ * camara tiene que soltarla antes quien la tuviera.
++ */
++class Foto50Mp(private val context: Context) {
++    private var hilo: HandlerThread? = null
++    private var handler: Handler? = null
++    private var camara: CameraDevice? = null
++    private var sesion: CameraCaptureSession? = null
++    private var lector: ImageReader? = null
++    private var lectorAux: ImageReader? = null
++
++    /** Para no llamar dos veces a quien espera el resultado. */
++    private val terminado = java.util.concurrent.atomic.AtomicBoolean(false)
++    private var vigilante: CameraManager.AvailabilityCallback? = null
++
++    /**
++     * Los plazos van por el hilo principal a proposito. Si fueran por el mismo
++     * hilo que habla con la camara, un bloqueo ahi dentro se los llevaria por
++     * delante justo cuando hacen falta.
++     */
++    private val plazos = Handler(android.os.Looper.getMainLooper())
++
++    /**
++     * Hace la foto y devuelve donde ha quedado guardada, o null si no ha
++     * podido. La llamada vuelve enseguida; el resultado llega por [alTerminar].
++     */
++    fun capturar(alTerminar: (Uri?) -> Unit) {
++        val manager = context.getSystemService(CameraManager::class.java)
++        if (manager == null) {
++            alTerminar(null)
++            return
++        }
++        val idCamara = idDeLaPrincipal(manager)
++        if (idCamara == null) {
++            Log.e(TAG, "no hay ninguna camara trasera con tamano completo")
++            alTerminar(null)
++            return
++        }
++        val medidas = tamanoCompleto(manager, idCamara)
++        if (medidas == null) {
++            Log.e(TAG, "la camara " + idCamara + " no ofrece el tamano completo")
++            alTerminar(null)
++            return
++        }
++        val ancho = medidas.first
++        val alto = medidas.second
++
++        val nuevoHilo = HandlerThread("foto50mp")
++        nuevoHilo.start()
++        hilo = nuevoHilo
++        handler = Handler(nuevoHilo.looper)
++        Log.i(TAG, "hilo listo, se prepara la captura de " + ancho + "x" + alto)
++
++        val orientacion = runCatching {
++            manager.getCameraCharacteristics(idCamara)
++                .get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
++        }.getOrElse {
++            Log.e(TAG, "no se pudo leer la orientacion", it)
++            0
++        }
++
++        // Una sola imagen: es justo lo que el HAL aguanta a este tamano.
++        lector = runCatching {
++            ImageReader.newInstance(ancho, alto, ImageFormat.JPEG, 1)
++        }.getOrElse {
++            Log.e(TAG, "no se pudo reservar la imagen de " + ancho + "x" + alto, it)
++            acabar(alTerminar, null)
++            return
++        }
++        lector!!.setOnImageAvailableListener({ lectorListo ->
++            var uri: Uri? = null
++            try {
++                val imagen = lectorListo.acquireLatestImage()
++                if (imagen != null) {
++                    imagen.use {
++                        val bufer = it.planes[0].buffer
++                        val datos = ByteArray(bufer.remaining())
++                        bufer.get(datos)
++                        uri = guardar(datos, ancho, alto)
++                    }
++                }
++            } catch (e: Throwable) {
++                Log.e(TAG, "no se pudo guardar la foto de 50 MP", e)
++            }
++            acabar(alTerminar, uri)
++        }, handler)
++
++        // El HAL quiere una segunda salida ademas de la foto. Esta no se ve en
++        // ningun sitio, solo esta para que la sesion sea valida.
++        lectorAux = runCatching {
++            ImageReader.newInstance(ANCHO_AUX, ALTO_AUX, ImageFormat.PRIVATE, 2)
++        }.getOrElse {
++            Log.e(TAG, "no se pudo reservar la salida auxiliar", it)
++            acabar(alTerminar, null)
++            return
++        }
++        Log.i(TAG, "salidas preparadas; se espera a que la camara quede libre")
++
++        // La camara puede seguir ocupada por quien la tuviera: soltarla no es
++        // inmediato. Se espera al aviso del sistema y, si no llega a tiempo, se
++        // abandona en vez de quedarse colgado.
++        esperarYAbrir(manager, idCamara, orientacion, alTerminar)
++    }
++
++    /**
++     * Abre la camara en cuanto este libre. Si en [ESPERA_MAXIMA_MS] no lo esta,
++     * se rinde y avisa: mejor perder la foto que dejar la camara bloqueada.
++     */
++    private fun esperarYAbrir(
++        manager: CameraManager, idCamara: String, orientacion: Int,
++        alTerminar: (Uri?) -> Unit
++    ) {
++        val abrir = {
++            Log.i(TAG, "toca abrir la camara (terminado=" + terminado.get() + ")")
++            if (!terminado.get()) {
++                quitarVigilante(manager)
++                abrirDeVerdad(manager, idCamara, orientacion, alTerminar)
++            }
++        }
++
++        // Plazo maximo, pase lo que pase.
++        plazos.postDelayed({
++            if (camara == null && !terminado.get()) {
++                Log.e(TAG, "la camara sigue ocupada; se abandona la foto de 50 MP")
++                quitarVigilante(manager)
++                acabar(alTerminar, null)
++            }
++        }, ESPERA_MAXIMA_MS)
++
++        val nuevoVigilante = object : CameraManager.AvailabilityCallback() {
++            override fun onCameraAvailable(id: String) {
++                if (id == idCamara) {
++                    Log.i(TAG, "la camara ha quedado libre")
++                    abrir()
++                }
++            }
++        }
++        vigilante = nuevoVigilante
++        runCatching { manager.registerAvailabilityCallback(nuevoVigilante, handler) }
++
++        // Puede que ya estuviera libre y el aviso no vuelva a llegar: se prueba
++        // igualmente pasado un instante.
++        plazos.postDelayed({ handler?.post { abrir() } }, ESPERA_CORTESIA_MS)
++    }
++
++    private fun quitarVigilante(manager: CameraManager) {
++        vigilante?.let { runCatching { manager.unregisterAvailabilityCallback(it) } }
++        vigilante = null
++    }
++
++    /** Contesta una sola vez y deja todo cerrado. */
++    private fun acabar(alTerminar: (Uri?) -> Unit, uri: Uri?) {
++        if (terminado.compareAndSet(false, true)) {
++            plazos.removeCallbacksAndMessages(null)
++            cerrar()
++            alTerminar(uri)
++        }
++    }
++
++    private fun abrirDeVerdad(
++        manager: CameraManager, idCamara: String, orientacion: Int,
++        alTerminar: (Uri?) -> Unit
++    ) {
++        if (camara != null) {
++            return
++        }
++        Log.i(TAG, "abriendo la camara " + idCamara)
++        try {
++            manager.openCamera(idCamara, object : CameraDevice.StateCallback() {
++                override fun onOpened(dispositivo: CameraDevice) {
++                    Log.i(TAG, "camara abierta; se configura la sesion")
++                    camara = dispositivo
++                    configurar(dispositivo, orientacion, alTerminar)
++                }
++
++                override fun onDisconnected(dispositivo: CameraDevice) {
++                    dispositivo.close()
++                    camara = null
++                    acabar(alTerminar, null)
++                }
++
++                override fun onError(dispositivo: CameraDevice, error: Int) {
++                    Log.e(TAG, "no se pudo abrir la camara: " + error)
++                    dispositivo.close()
++                    camara = null
++                    acabar(alTerminar, null)
++                }
++            }, handler)
++        } catch (e: Throwable) {
++            Log.e(TAG, "fallo al abrir la camara", e)
++            acabar(alTerminar, null)
++        }
++    }
++
++    /**
++     * Primero una sesion normal solo con la salida auxiliar, para que la
++     * exposicion y el enfoque converjan. Sin esto el HAL entrega una imagen
++     * pequena y en un suspiro en lugar de la de resolucion completa.
++     */
++    private fun configurar(
++        dispositivo: CameraDevice, orientacion: Int, alTerminar: (Uri?) -> Unit
++    ) {
++        val respuesta = object : CameraCaptureSession.StateCallback() {
++            override fun onConfigured(nueva: CameraCaptureSession) {
++                Log.i(TAG, "previa en marcha; midiendo la escena")
++                sesion = nueva
++                val arrancada = runCatching {
++                    val previa = dispositivo.createCaptureRequest(
++                        CameraDevice.TEMPLATE_PREVIEW
++                    )
++                    previa.addTarget(lectorAux!!.surface)
++                    previa.set(
++                        CaptureRequest.CONTROL_AF_MODE,
++                        CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
++                    )
++                    nueva.setRepeatingRequest(previa.build(), null, handler)
++                }.isSuccess
++                plazos.postDelayed({
++                    handler?.post {
++                        // La previa se cierra del todo antes de pedir la foto:
++                        // si se queda viva dentro de la sesion de resolucion
++                        // completa, el HAL aborta atendiendola.
++                        runCatching { nueva.stopRepeating() }
++                        runCatching { nueva.close() }
++                        sesion = null
++                        sesionDeFoto(dispositivo, orientacion, alTerminar)
++                    }
++                }, if (arrancada) ESPERA_PREVIA_MS else 0L)
++            }
++
++            override fun onConfigureFailed(nueva: CameraCaptureSession) {
++                Log.w(TAG, "no se pudo abrir la previa; se va directo a la foto")
++                sesionDeFoto(dispositivo, orientacion, alTerminar)
++            }
++        }
++        try {
++            dispositivo.createCaptureSession(
++                SessionConfiguration(
++                    SessionConfiguration.SESSION_REGULAR,
++                    listOf(OutputConfiguration(lectorAux!!.surface)),
++                    { orden -> handler?.post(orden) }, respuesta
++                )
++            )
++        } catch (e: Throwable) {
++            Log.e(TAG, "fallo al preparar la previa", e)
++            sesionDeFoto(dispositivo, orientacion, alTerminar)
++        }
++    }
++
++    /**
++     * La sesion de la foto: modo propietario, una sola captura y ninguna
++     * peticion repetida corriendo.
++     */
++    private fun sesionDeFoto(
++        dispositivo: CameraDevice, orientacion: Int, alTerminar: (Uri?) -> Unit
++    ) {
++        if (terminado.get()) {
++            return
++        }
++        val salidas = listOf(
++            OutputConfiguration(lectorAux!!.surface),
++            OutputConfiguration(lector!!.surface)
++        )
++        val respuesta = object : CameraCaptureSession.StateCallback() {
++            override fun onConfigured(nueva: CameraCaptureSession) {
++                Log.i(TAG, "sesion de foto configurada")
++                sesion = nueva
++                disparar(dispositivo, nueva, orientacion, alTerminar)
++            }
++
++            override fun onConfigureFailed(nueva: CameraCaptureSession) {
++                Log.e(TAG, "el HAL rechazo la sesion de 50 MP (modo "
++                        + MODO_RESOLUCION_COMPLETA + ")")
++                acabar(alTerminar, null)
++            }
++        }
++        try {
++            // createCustomCaptureSession no comprueba el tamano contra la lista
++            // publicada, que es justo lo que hace falta: el HAL sabe entregar
++            // los 50 MP aunque no los anuncie. El modo es el propietario de
++            // Xiaomi para el mosaico completo.
++            Log.i(TAG, "pidiendo sesion en modo " + MODO_RESOLUCION_COMPLETA)
++            dispositivo.createCustomCaptureSession(
++                null, salidas, MODO_RESOLUCION_COMPLETA, respuesta, handler
++            )
++            plazos.postDelayed({
++                if (sesion == null && !terminado.get()) {
++                    Log.e(TAG, "el HAL no ha contestado a la sesion de 50 MP")
++                    acabar(alTerminar, null)
++                }
++            }, ESPERA_SESION_MS)
++        } catch (e: Throwable) {
++            Log.e(TAG, "fallo al preparar la sesion", e)
++            acabar(alTerminar, null)
++        }
++    }
++
++    private fun disparar(
++        dispositivo: CameraDevice, sesionActiva: CameraCaptureSession,
++        orientacion: Int, alTerminar: (Uri?) -> Unit
++    ) {
++        try {
++            val constructor = dispositivo.createCaptureRequest(
++                CameraDevice.TEMPLATE_STILL_CAPTURE
++            )
++            constructor.addTarget(lector!!.surface)
++            constructor.set(CaptureRequest.JPEG_ORIENTATION, orientacion)
++            constructor.set(CaptureRequest.JPEG_QUALITY, CALIDAD)
++            constructor.set(
++                CaptureRequest.CONTROL_AF_MODE,
++                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
++            )
++            // A esta resolucion la reduccion de ruido alta emborrona justo el
++            // detalle fino que se venia a buscar.
++            constructor.set(
++                CaptureRequest.NOISE_REDUCTION_MODE,
++                CaptureRequest.NOISE_REDUCTION_MODE_MINIMAL
++            )
++            constructor.set(
++                CaptureRequest.EDGE_MODE,
++                CaptureRequest.EDGE_MODE_HIGH_QUALITY
++            )
++            // Sin esta etiqueta el HAL devuelve la imagen recortada aunque el
++            // tamano pedido sea el grande.
++            for (etiqueta in ETIQUETAS) {
++                runCatching {
++                    constructor.set(
++                        CaptureRequest.Key(etiqueta, Byte::class.java), 1.toByte()
++                    )
++                }.onFailure { Log.w(TAG, "no se pudo poner " + etiqueta + ": " + it) }
++            }
++            Log.i(TAG, "enviando el disparo")
++            sesionActiva.capture(constructor.build(), null, handler)
++            Log.i(TAG, "disparo enviado; esperando la imagen")
++            plazos.postDelayed({
++                if (!terminado.get()) {
++                    Log.e(TAG, "el HAL no ha entregado la foto a tiempo")
++                    acabar(alTerminar, null)
++                }
++            }, ESPERA_FOTO_MS)
++        } catch (e: Throwable) {
++            Log.e(TAG, "fallo al disparar", e)
++            acabar(alTerminar, null)
++        }
++    }
++
++    private fun guardar(datos: ByteArray, ancho: Int, alto: Int): Uri? {
++        val marca = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
++        val valores = ContentValues()
++        valores.put(MediaStore.Images.Media.DISPLAY_NAME, "IMG_" + marca + "_50MP.jpg")
++        valores.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
++        valores.put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/Camera")
++        valores.put(MediaStore.Images.Media.WIDTH, ancho)
++        valores.put(MediaStore.Images.Media.HEIGHT, alto)
++        val uri = context.contentResolver.insert(
++            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, valores
++        ) ?: return null
++        context.contentResolver.openOutputStream(uri)?.use { it.write(datos) }
++        Log.i(TAG, "foto de 50 MP guardada: " + datos.size + " bytes, " + ancho + "x" + alto)
++        return uri
++    }
++
++    private fun cerrar() {
++        runCatching { sesion?.close() }
++        runCatching { camara?.close() }
++        runCatching { lector?.close() }
++        runCatching { lectorAux?.close() }
++        sesion = null
++        camara = null
++        lector = null
++        lectorAux = null
++        hilo?.quitSafely()
++        hilo = null
++        handler = null
++    }
++
++    /**
++     * La primera camara trasera que ofrezca una foto del tamano del sensor.
++     *
++     * Cada camara se mira por separado a proposito: alguna de las que declara
++     * el movil da error al consultarla, y si se envuelve el recorrido entero
++     * en un try ese fallo se lleva por delante tambien a las que si valen.
++     */
++    private fun idDeLaPrincipal(manager: CameraManager): String? {
++        val ids = runCatching { manager.cameraIdList }.getOrNull() ?: return null
++        for (id in ids) {
++            val caracteristicas = runCatching {
++                manager.getCameraCharacteristics(id)
++            }.getOrNull() ?: continue
++            if (caracteristicas.get(CameraCharacteristics.LENS_FACING) !=
++                CameraCharacteristics.LENS_FACING_BACK
++            ) {
++                continue
++            }
++            val medidas = tamanoCompleto(manager, id)
++            Log.i(TAG, "camara " + id + ": tamano completo " + medidas)
++            if (medidas != null) {
++                return id
++            }
++        }
++        return null
++    }
++
++    /**
++     * El tamano de foto mas grande que anuncia la camara, si es mayor que lo
++     * que da el sensor agrupando pixeles. Si no lo hay, no hay nada que hacer
++     * aqui y la foto se hace por el camino de siempre.
++     */
++    private fun tamanoCompleto(manager: CameraManager, id: String): Pair<Int, Int>? {
++        val caracteristicas = runCatching {
++            manager.getCameraCharacteristics(id)
++        }.getOrNull() ?: return null
++
++        // No se mira la lista de tamanos publicados: el grande no esta ahi, por
++        // eso hace falta todo esto. Se mira lo que el sensor dice medir cuando
++        // no agrupa pixeles, que es lo que el HAL sabe entregar.
++        val completo = caracteristicas.get(
++            CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE_MAXIMUM_RESOLUTION
++        )
++        if (completo != null &&
++            completo.width.toLong() * completo.height > AREA_MINIMA
++        ) {
++            return Pair(completo.width, completo.height)
++        }
++
++        // Y si alguna camara si lo publica, se aprovecha.
++        val mapa = caracteristicas.get(
++            CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
++        ) ?: return null
++        val mayor = mapa.getOutputSizes(ImageFormat.JPEG)
++            ?.maxByOrNull { it.width.toLong() * it.height } ?: return null
++        return if (mayor.width.toLong() * mayor.height > AREA_MINIMA) {
++            Pair(mayor.width, mayor.height)
++        } else {
++            null
++        }
++    }
++
++    companion object {
++        private const val TAG = "Foto50Mp"
++
++        /** Solo se considera resolucion completa por encima de esto. */
++        private const val AREA_MINIMA = 4208L * 3120L
++
++        /**
++         * Modo de sesion propietario de Xiaomi para el mosaico completo.
++         * Medido en el movil: con este sale la foto de 8192x6144; con el 36868
++         * que usa la comunidad para otros modelos, el HAL rechaza la sesion.
++         */
++        private const val MODO_RESOLUCION_COMPLETA = 0x80F3
++
++        /**
++         * La primera es la que de verdad trae los 50 MP; la segunda le dice al
++         * HAL que conserve el detalle fino en vez de pasar por los filtros
++         * temporales. Son las mismas que usa la camara propia.
++         */
++        private val ETIQUETAS = arrayOf(
++            "xiaomi.remosaic.enabled",
++            "xiaomi.pureView.enabled"
++        )
++
++        /** Lo que se deja correr la previa antes de disparar. */
++        private const val ESPERA_PREVIA_MS = 1500L
++
++        /** Margen para que quien tuviera la camara acabe de soltarla. */
++        private const val ESPERA_CORTESIA_MS = 400L
++
++        /** Si en este tiempo no queda libre, se abandona la foto. */
++        private const val ESPERA_MAXIMA_MS = 4000L
++
++        /** Lo que se le da al HAL para aceptar o rechazar la sesion. */
++        private const val ESPERA_SESION_MS = 8000L
++
++        /** Y esto es lo que se le da al HAL para entregar la imagen. */
++        private const val ESPERA_FOTO_MS = 20000L
++
++        private const val ANCHO_AUX = 1920
++        private const val ALTO_AUX = 1440
++        private const val CALIDAD: Byte = 95
++    }
++}
+diff --git a/app/src/main/res/values-es/strings.xml b/app/src/main/res/values-es/strings.xml
+index 587a33b..634ffac 100644
+--- a/app/src/main/res/values-es/strings.xml
++++ b/app/src/main/res/values-es/strings.xml
+@@ -184,4 +184,8 @@
+     <string name="video_mirror_mode_off">Desactivado</string>
+     <string name="video_mirror_mode_on">Encendido</string>
+     <string name="video_mirror_mode_on_ffc_only">Solo cámara frontal</string>
++    <string name="photo_fifty_mp_title">Fotos a la resolucion completa</string>
++    <string name="photo_fifty_mp_summary">Hace las fotos a 50 MP. Tarda un par de segundos y mientras tanto la previa se queda congelada</string>
++    <string name="photo_fifty_mp_working">Haciendo la foto a resolucion completa\u2026</string>
++    <string name="photo_fifty_mp_failed">No se pudo hacer la foto a resolucion completa</string>
+ </resources>
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index f29f5c6..35ca890 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -251,4 +251,8 @@
+     <string name="video_mirror_mode_off">Off</string>
+     <string name="video_mirror_mode_on">On</string>
+     <string name="video_mirror_mode_on_ffc_only">Front facing camera only</string>
++    <string name="photo_fifty_mp_title">Photos at full sensor resolution</string>
++    <string name="photo_fifty_mp_summary">Capture 50 MP photos. Takes a couple of seconds and the preview freezes while it happens</string>
++    <string name="photo_fifty_mp_working">Taking a full resolution photo\u2026</string>
++    <string name="photo_fifty_mp_failed">The full resolution photo could not be taken</string>
+ </resources>
+diff --git a/app/src/main/res/xml/root_preferences.xml b/app/src/main/res/xml/root_preferences.xml
+index e3f847b..bf5d339 100644
+--- a/app/src/main/res/xml/root_preferences.xml
++++ b/app/src/main/res/xml/root_preferences.xml
+@@ -30,6 +30,13 @@
+             app:summary="@string/shutter_sound_summary"
+             app:title="@string/shutter_sound_title" />
+ 
++        <SwitchPreference
++            app:defaultValue="false"
++            app:iconSpaceReserved="false"
++            app:key="photo_fifty_mp"
++            app:summary="@string/photo_fifty_mp_summary"
++            app:title="@string/photo_fifty_mp_title" />
++
+         <SwitchPreference
+             app:defaultValue="false"
+             app:iconSpaceReserved="false"
+-- 
+2.43.0
+

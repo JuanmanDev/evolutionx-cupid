@@ -1,0 +1,60 @@
+From 8f8b987f726af7c05d1518f470100af5f12afd24 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:31 +0200
+Subject: [PATCH] qcom-caf common: Android.bp / os_pickup_qssi for cupid
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     Android.bp        | 18 +++++++++---------
+     os_pickup_qssi.bp |  1 +
+     2 files changed, 10 insertions(+), 9 deletions(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ Android.bp        | 18 +++++++++---------
+ os_pickup_qssi.bp |  1 +
+ 2 files changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/Android.bp b/Android.bp
+index a45aa86..e154449 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -8,15 +8,15 @@ cc_library_headers {
+     defaults: ["generated_kernel_header_defaults"],
+ }
+ 
+-cc_library_headers {
+-    name: "qti_audio_kernel_uapi",
+-    defaults: ["generated_kernel_header_defaults"],
+-}
+-
+-cc_library_headers {
+-    name: "qti_display_kernel_headers",
+-    defaults: ["generated_kernel_header_defaults"],
+-}
++//cc_library_headers {
++//    name: "qti_audio_kernel_uapi",
++//    defaults: ["generated_kernel_header_defaults"],
++//}
++//
++//cc_library_headers {
++//    name: "qti_display_kernel_headers",
++//    defaults: ["generated_kernel_header_defaults"],
++//}
+ 
+ cc_library_headers {
+     name: "qti_ipa_kernel_headers",
+diff --git a/os_pickup_qssi.bp b/os_pickup_qssi.bp
+index 3223ff5..f13ae8f 100644
+--- a/os_pickup_qssi.bp
++++ b/os_pickup_qssi.bp
+@@ -2,5 +2,6 @@ soong_namespace {
+     imports: [
+         "vendor/qcom/opensource/commonsys-intf/display",
+         "vendor/qcom/opensource/display",
++        "kernel/xiaomi/sm8450-modules",
+     ],
+ }
+-- 
+2.43.0
+

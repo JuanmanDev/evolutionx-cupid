@@ -1,0 +1,29 @@
+From 65b1d9f32a758fe2ee0a1aa1e4ccda083bbe2503 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:32 +0200
+Subject: [PATCH] display sm8750: qmaa Android.bp
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     qmaa/Android.bp | 1 +
+     1 file changed, 1 insertion(+)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ qmaa/Android.bp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/qmaa/Android.bp b/qmaa/Android.bp
+index 9695d8fc6f..c929328d6c 100644
+--- a/qmaa/Android.bp
++++ b/qmaa/Android.bp
+@@ -1,5 +1,6 @@
+ soong_namespace {
+     imports: [
++        "kernel/xiaomi/sm8450-modules",
+         "hardware/qcom-caf/sm8750",
+     ],
+ }
+-- 
+2.43.0
+

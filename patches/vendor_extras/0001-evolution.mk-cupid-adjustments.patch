@@ -1,0 +1,52 @@
+From d5b669df6aa809532f58fae15394e9d819d0b713 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:31 +0200
+Subject: [PATCH] evolution.mk: cupid adjustments
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     evolution.mk | 23 +++++++++++++----------
+     1 file changed, 13 insertions(+), 10 deletions(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ evolution.mk | 23 +++++++++++++----------
+ 1 file changed, 13 insertions(+), 10 deletions(-)
+
+diff --git a/evolution.mk b/evolution.mk
+index dd1c4ba..61c1e8e 100644
+--- a/evolution.mk
++++ b/evolution.mk
+@@ -13,16 +13,19 @@ PRODUCT_PACKAGES += \
+     Gramophone
+ endif
+ 
+-# Clocks (SystemUI)
+-PRODUCT_PACKAGES += \
+-    SystemUIClocks-BigNum \
+-    SystemUIClocks-Calligraphy \
+-    SystemUIClocks-Flex \
+-    SystemUIClocks-Growth \
+-    SystemUIClocks-Inflate \
+-    SystemUIClocks-Metro \
+-    SystemUIClocks-NumOverlap \
+-    SystemUIClocks-Weather
++# Clocks (SystemUI) - DESACTIVADOS
++# Estos APK precompilados declaran ClockProviderPlugin con una version que el
++# SystemUI de Android 17 rechaza: VersionInfo$InvalidVersionException. Cualquier
++# selector de fondos/temas (el de Google y ThemePicker) crashea al cargarlos,
++# asi que 'Fondo de pantalla y estilo' quedaba inutilizable.
++#     SystemUIClocks-BigNum
++#     SystemUIClocks-Calligraphy
++#     SystemUIClocks-Flex
++#     SystemUIClocks-Growth
++#     SystemUIClocks-Inflate
++#     SystemUIClocks-Metro
++#     SystemUIClocks-NumOverlap
++#     SystemUIClocks-Weather
+ 
+ PRODUCT_PACKAGES += \
+     HideSmartSpace \
+-- 
+2.43.0
+

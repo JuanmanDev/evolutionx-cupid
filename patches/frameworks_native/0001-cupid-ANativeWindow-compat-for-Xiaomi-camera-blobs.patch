@@ -1,0 +1,118 @@
+From d913e7b57e8bdbc6a878ffbdd40e6d4ea339f6c2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:30 +0200
+Subject: [PATCH] cupid: ANativeWindow compat for Xiaomi camera blobs
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     libs/nativewindow/ANativeWindow.cpp | 74 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+     1 file changed, 73 insertions(+), 1 deletion(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ libs/nativewindow/ANativeWindow.cpp | 74 ++++++++++++++++++++++++++++-
+ 1 file changed, 73 insertions(+), 1 deletion(-)
+
+diff --git a/libs/nativewindow/ANativeWindow.cpp b/libs/nativewindow/ANativeWindow.cpp
+index 2fb80be18a..854f73adba 100644
+--- a/libs/nativewindow/ANativeWindow.cpp
++++ b/libs/nativewindow/ANativeWindow.cpp
+@@ -26,6 +26,7 @@
+ 
+ #include <android/binder_libbinder.h>
+ #include <dlfcn.h>
++#include <cutils/properties.h>
+ #include <log/log.h>
+ #include <ui/GraphicBuffer.h>
+ 
+@@ -356,8 +357,66 @@ int ANativeWindow_queryf(const ANativeWindow* window, ANativeWindowQuery what, f
+     return e;
+ }
+ 
++// Conecta la ventana como productor si aun no lo esta.
++//
++// Quien usa la parte de C++ (Surface, ImageWriter) se conecta solo. Quien usa
++// esta parte de la NDK tiene que llamar antes a native_window_api_connect, y hay
++// codigo que da por hecho que la ventana ya venia conectada. Sin conexion,
++// setBufferCount falla y dequeueBuffer devuelve NO_INIT.
++static bool conectarSiHaceFalta(ANativeWindow* window) {
++    // Apagado por defecto, y a proposito.
++    //
++    // Conectar aqui hace que el motor de Xiaomi consiga su bufer de salida y lo
++    // encole, y con eso la foto sale del tamano correcto... pero **vacia**: sale
++    // entera verde, que es como se ve un YUV a ceros. Sin esto, el motor falla
++    // antes y la aplicacion guarda su miniatura, que es pequena pero es una foto
++    // de verdad. Entre las dos, mejor la pequena.
++    //
++    // Probado con las cuatro APIs (EGL, CPU, MEDIA, CAMERA) y conectando
++    // tambien antes de setBufferCount: verde en todos los casos. Falta averiguar
++    // por que el motor no llega a escribir.
++    //
++    //   0 no conectar, 1 EGL, 2 CPU, 3 MEDIA, 4 CAMERA
++    //   setprop persist.sys.camera.qcfa_api 3
++    const int api = property_get_int32("persist.sys.camera.qcfa_api", 0);
++    if (api <= 0) {
++        return false;
++    }
++    return native_window_api_connect(window, api) == android::NO_ERROR;
++}
++
+ int ANativeWindow_dequeueBuffer(ANativeWindow* window, ANativeWindowBuffer** buffer, int* fenceFd) {
+-    return window->dequeueBuffer(window, buffer, fenceFd);
++    int resultado = window->dequeueBuffer(window, buffer, fenceFd);
++
++    // Pedir un bufer sin haberse conectado antes como productor devuelve
++    // NO_INIT, y la cola lo cuenta asi:
++    //
++    //   BufferQueueProducer: [ImageReader-4160x3120f23m8](api:0)
++    //     dequeueBuffer: BufferQueue has no connected producer
++    //
++    // Quien usa la parte de C++ (Surface, ImageWriter) se conecta solo. Quien
++    // usa esta funcion de la NDK tiene que llamar antes a
++    // native_window_api_connect, y hay codigo que da por hecho que la ventana
++    // ya venia conectada. En la camara de Xiaomi eso deja al motor de
++    // post-proceso sin donde escribir la foto revelada, y se acaba guardando la
++    // miniatura en su lugar.
++    //
++    // Conectar aqui solo cambia el caso que hoy es un fallo seco: si la ventana
++    // ya estaba conectada, este camino ni se pisa.
++    if (resultado == android::NO_INIT) {
++        // Con que API conectarse importa: conectar como CPU marca los buferes
++        // para lectura/escritura por procesador, y el motor de Xiaomi escribe
++        // por el DSP. Si se elige mal, el bufer vuelve entero a ceros y la foto
++        // sale verde (que es como se ve un YUV a ceros).
++        //
++        //   1 EGL, 2 CPU, 3 MEDIA, 4 CAMERA
++        //   setprop persist.sys.camera.qcfa_api 3
++        if (conectarSiHaceFalta(window)) {
++            resultado = window->dequeueBuffer(window, buffer, fenceFd);
++        }
++    }
++
++    return resultado;
+ }
+ 
+ int ANativeWindow_queueBuffer(ANativeWindow* window, ANativeWindowBuffer* buffer, int fenceFd) {
+@@ -373,6 +432,19 @@ int ANativeWindow_setUsage(ANativeWindow* window, uint64_t usage) {
+ }
+ 
+ int ANativeWindow_setBufferCount(ANativeWindow* window, size_t bufferCount) {
++    // Este si necesita conexion: va por IPC hasta el productor. Si falla, quien
++    // llama se queda sin los buferes que pidio y puede acabar entregando uno
++    // vacio, que es la foto verde.
++    {
++        int previo = native_window_set_buffer_count(window, bufferCount);
++        if (previo != android::NO_INIT) {
++            return previo;
++        }
++        if (conectarSiHaceFalta(window)) {
++            return native_window_set_buffer_count(window, bufferCount);
++        }
++        return previo;
++    }
+     return native_window_set_buffer_count(window, bufferCount);
+ }
+ 
+-- 
+2.43.0
+

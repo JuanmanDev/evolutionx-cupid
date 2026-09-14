@@ -1,0 +1,166 @@
+From d2d81d85adeb1894ea481893099ce3ffa41489b9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:31 +0200
+Subject: [PATCH] libion: add msm_ion kernel headers
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     kernel-headers/linux/msm_ion.h     | 95 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+     kernel-headers/linux/msm_ion_ids.h | 37 +++++++++++++++++++++++
+     2 files changed, 132 insertions(+)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ kernel-headers/linux/msm_ion.h     | 95 ++++++++++++++++++++++++++++++
+ kernel-headers/linux/msm_ion_ids.h | 37 ++++++++++++
+ 2 files changed, 132 insertions(+)
+ create mode 100644 kernel-headers/linux/msm_ion.h
+ create mode 100644 kernel-headers/linux/msm_ion_ids.h
+
+diff --git a/kernel-headers/linux/msm_ion.h b/kernel-headers/linux/msm_ion.h
+new file mode 100644
+index 0000000..e68fc55
+--- /dev/null
++++ b/kernel-headers/linux/msm_ion.h
+@@ -0,0 +1,95 @@
++/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
++/*
++ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
++ */
++#ifndef _UAPI_LINUX_MSM_ION_H
++#define _UAPI_LINUX_MSM_ION_H
++
++#include <linux/types.h>
++#include <linux/msm_ion_ids.h>
++
++/**
++ * TARGET_ION_ABI_VERSION can be used by user space clients to ensure that at
++ * compile time only their code which uses the appropriate ION APIs for
++ * this kernel is included.
++ */
++#define TARGET_ION_ABI_VERSION 3
++
++enum msm_ion_heap_types {
++	ION_HEAP_TYPE_MSM_START = 16,
++	ION_HEAP_TYPE_SECURE_DMA = ION_HEAP_TYPE_MSM_START,
++	ION_HEAP_TYPE_SYSTEM_SECURE,
++	ION_HEAP_TYPE_HYP_CMA,
++	ION_HEAP_TYPE_MSM_CARVEOUT,
++	ION_HEAP_TYPE_SECURE_CARVEOUT,
++	ION_HEAP_TYPE_MSM_SYSTEM,
++};
++
++/**
++ * Flags to be used when allocating from the secure heap for
++ * content protection
++ */
++#define ION_FLAG_CP_TRUSTED_VM		ION_BIT(15)
++/* ION_FLAG_POOL_FORCE_ALLOC uses ION_BIT(16) */
++#define ION_FLAG_CP_TOUCH		ION_BIT(17)
++#define ION_FLAG_CP_BITSTREAM		ION_BIT(18)
++#define ION_FLAG_CP_PIXEL		ION_BIT(19)
++#define ION_FLAG_CP_NON_PIXEL		ION_BIT(20)
++#define ION_FLAG_CP_CAMERA		ION_BIT(21)
++#define ION_FLAG_CP_HLOS		ION_BIT(22)
++#define ION_FLAG_CP_SPSS_SP		ION_BIT(23)
++#define ION_FLAG_CP_SPSS_SP_SHARED	ION_BIT(24)
++#define ION_FLAG_CP_SEC_DISPLAY		ION_BIT(25)
++#define ION_FLAG_CP_APP			ION_BIT(26)
++#define ION_FLAG_CP_CAMERA_PREVIEW	ION_BIT(27)
++/* ION_FLAG_ALLOW_NON_CONTIG uses ION_BIT(28) */
++#define ION_FLAG_CP_CDSP		ION_BIT(29)
++#define ION_FLAG_CP_SPSS_HLOS_SHARED	ION_BIT(30)
++
++#define ION_FLAGS_CP_MASK	0x6FFE8000
++
++/**
++ * Flag to allow non continguous allocation of memory from secure
++ * heap
++ */
++#define ION_FLAG_ALLOW_NON_CONTIG       ION_BIT(28)
++
++/**
++ * Flag to use when allocating to indicate that a heap is secure.
++ * Do NOT use BIT macro since it is defined in #ifdef __KERNEL__
++ */
++#define ION_FLAG_SECURE			ION_BIT(31)
++
++/*
++ * Used in conjunction with heap which pool memory to force an allocation
++ * to come from the page allocator directly instead of from the pool allocation
++ */
++#define ION_FLAG_POOL_FORCE_ALLOC	ION_BIT(16)
++
++/**
++ * Macro should be used with ion_heap_ids defined above.
++ */
++#define ION_HEAP(bit)			bit
++
++#define ION_IOC_MSM_MAGIC 'M'
++
++struct ion_prefetch_regions {
++	__u64 sizes;
++	__u32 vmid;
++	__u32 nr_sizes;
++};
++
++struct ion_prefetch_data {
++	__u64 len;
++	__u64 regions;
++	__u32 heap_id;
++	__u32 nr_regions;
++};
++
++#define ION_IOC_PREFETCH		_IOWR(ION_IOC_MSM_MAGIC, 3, \
++						struct ion_prefetch_data)
++
++#define ION_IOC_DRAIN			_IOWR(ION_IOC_MSM_MAGIC, 4, \
++						struct ion_prefetch_data)
++
++#endif /* _UAPI_LINUX_MSM_ION_H */
+diff --git a/kernel-headers/linux/msm_ion_ids.h b/kernel-headers/linux/msm_ion_ids.h
+new file mode 100644
+index 0000000..8576619
+--- /dev/null
++++ b/kernel-headers/linux/msm_ion_ids.h
+@@ -0,0 +1,37 @@
++/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
++/*
++ * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
++ */
++#ifndef _MSM_ION_IDS_H
++#define _MSM_ION_IDS_H
++
++#define ION_BIT(nr) (1U << (nr))
++
++/**
++ * These are the only ids that should be used for Ion heap ids.
++ * The ids listed are the order in which allocation will be attempted
++ * if specified. Don't swap the order of heap ids unless you know what
++ * you are doing!
++ * Id's are spaced by purpose to allow new Id's to be inserted in-between (for
++ * possible fallbacks)
++ */
++
++/* ION_BIT(0) is reserved for the generic system heap. */
++#define ION_QSECOM_TA_HEAP_ID		ION_BIT(1)
++#define ION_CAMERA_HEAP_ID		ION_BIT(2)
++#define ION_DISPLAY_HEAP_ID		ION_BIT(3)
++#define ION_ADSP_HEAP_ID		ION_BIT(4)
++#define ION_AUDIO_ML_HEAP_ID		ION_BIT(5)
++#define ION_USER_CONTIG_HEAP_ID		ION_BIT(6)
++#define ION_QSECOM_HEAP_ID		ION_BIT(7)
++#define ION_AUDIO_HEAP_ID		ION_BIT(8)
++#define ION_CP_MM_HEAP_ID		ION_BIT(9)
++#define ION_SECURE_HEAP_ID		ION_BIT(10)
++#define ION_SECURE_DISPLAY_HEAP_ID	ION_BIT(11)
++#define ION_SPSS_HEAP_ID		ION_BIT(14)
++#define ION_SECURE_CARVEOUT_HEAP_ID	ION_BIT(15)
++#define ION_TUI_CARVEOUT_HEAP_ID	ION_BIT(16)
++#define ION_SYSTEM_HEAP_ID		ION_BIT(25)
++#define ION_HEAP_ID_RESERVED		ION_BIT(31)
++
++#endif /* _MSM_ION_IDS_H */
+-- 
+2.43.0
+

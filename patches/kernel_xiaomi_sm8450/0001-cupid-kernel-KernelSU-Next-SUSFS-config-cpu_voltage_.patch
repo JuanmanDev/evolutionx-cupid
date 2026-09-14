@@ -1,0 +1,111 @@
+From 660cc7a968fb460f90f4a3ae17e324b032825064 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:28 +0200
+Subject: [PATCH] cupid: kernel - KernelSU-Next + SUSFS config,
+ cpu_voltage_cooling, unifdef, Android.bpignore
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     Android.bpignore                           |  0
+     arch/arm64/configs/vendor/cupid_GKI.config |  8 ++++++++
+     drivers/thermal/qcom/cpu_voltage_cooling.c |  2 +-
+     scripts/unifdef.c                          | 12 ++++++------
+     4 files changed, 15 insertions(+), 7 deletions(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ Android.bpignore                           |  0
+ arch/arm64/configs/vendor/cupid_GKI.config |  8 ++++++++
+ drivers/thermal/qcom/cpu_voltage_cooling.c |  2 +-
+ scripts/unifdef.c                          | 12 ++++++------
+ 4 files changed, 15 insertions(+), 7 deletions(-)
+ create mode 100644 Android.bpignore
+
+diff --git a/Android.bpignore b/Android.bpignore
+new file mode 100644
+index 000000000000..e69de29bb2d1
+diff --git a/arch/arm64/configs/vendor/cupid_GKI.config b/arch/arm64/configs/vendor/cupid_GKI.config
+index 9642c4982fa3..60a5c1df1ba7 100644
+--- a/arch/arm64/configs/vendor/cupid_GKI.config
++++ b/arch/arm64/configs/vendor/cupid_GKI.config
+@@ -6,3 +6,11 @@
+ 
+ # Power
+ CONFIG_MI_CHARGER_M81=y
++
++# NO poner aqui CONFIG_LTO_CLANG_THIN. Se probo (para bajar el consumo de los
++# enlaces, ~8 GB por enlazador) y el kernel resultante no arranca: pantalla
++# apagada, sin USB y sin llegar a inicializar pstore. Este kernel lleva
++# CONFIG_CFI_CLANG=y, y el CFI de 5.10 se genera durante el LTO, asi que
++# cambiar de completo a thin altera esa comprobacion. El kernel que si arranca
++# se compilo con el LTO completo del gki_defconfig; se deja tal cual.
++# Para limitar la memoria, reducir el paralelismo del build (-j), no el LTO.
+diff --git a/drivers/thermal/qcom/cpu_voltage_cooling.c b/drivers/thermal/qcom/cpu_voltage_cooling.c
+index 212aae8973df..522d29b17040 100644
+--- a/drivers/thermal/qcom/cpu_voltage_cooling.c
++++ b/drivers/thermal/qcom/cpu_voltage_cooling.c
+@@ -178,7 +178,7 @@ static struct cc_limits_data *opp_init(int *cpus)
+ {
+ 	int cpu1, cpu2;
+ 	struct device *cpu1_dev, *cpu2_dev;
+-	struct limits_freq_table *cpu1_freq_table, *cpu2_freq_table = NULL;
++	struct limits_freq_table *cpu1_freq_table = NULL, *cpu2_freq_table = NULL;
+ 	struct limits_freq_table *cpu_freq_table[CPU_MAP_CT];
+ 	int table_ct[CPU_MAP_CT], ret = 0;
+ 	struct cc_limits_data *cc_cdev = NULL;
+diff --git a/scripts/unifdef.c b/scripts/unifdef.c
+index db00e3e30a59..079c77bf7359 100644
+--- a/scripts/unifdef.c
++++ b/scripts/unifdef.c
+@@ -203,7 +203,7 @@ static int              depth;			/* current #if nesting */
+ static int              delcount;		/* count of deleted lines */
+ static unsigned         blankcount;		/* count of blank lines */
+ static unsigned         blankmax;		/* maximum recent blankcount */
+-static bool             constexpr;		/* constant #if expression */
++static bool             const_expr;		/* constant #if expression */
+ static bool             zerosyms = true;	/* to format symdepth output */
+ static bool             firstsym;		/* ditto */
+ 
+@@ -819,7 +819,7 @@ static const struct ops {
+ /*
+  * Function for evaluating the innermost parts of expressions,
+  * viz. !expr (expr) number defined(symbol) symbol
+- * We reset the constexpr flag in the last two cases.
++ * We reset the const_expr flag in the last two cases.
+  */
+ static Linetype
+ eval_unary(const struct ops *ops, int *valp, const char **cpp)
+@@ -877,7 +877,7 @@ eval_unary(const struct ops *ops, int *valp, const char **cpp)
+ 		cp = skipcomment(cp);
+ 		if (defparen && *cp++ != ')')
+ 			return (LT_ERROR);
+-		constexpr = false;
++		const_expr = false;
+ 	} else if (!endsym(*cp)) {
+ 		debug("eval%d symbol", ops - eval_ops);
+ 		sym = findsym(cp);
+@@ -895,7 +895,7 @@ eval_unary(const struct ops *ops, int *valp, const char **cpp)
+ 			lt = *valp ? LT_TRUE : LT_FALSE;
+ 			cp = skipargs(cp);
+ 		}
+-		constexpr = false;
++		const_expr = false;
+ 	} else {
+ 		debug("eval%d bad expr", ops - eval_ops);
+ 		return (LT_ERROR);
+@@ -955,10 +955,10 @@ ifeval(const char **cpp)
+ 	int val = 0;
+ 
+ 	debug("eval %s", *cpp);
+-	constexpr = killconsts ? false : true;
++	const_expr = killconsts ? false : true;
+ 	ret = eval_table(eval_ops, &val, cpp);
+ 	debug("eval = %d", val);
+-	return (constexpr ? LT_IF : ret == LT_ERROR ? LT_IF : ret);
++	return (const_expr ? LT_IF : ret == LT_ERROR ? LT_IF : ret);
+ }
+ 
+ /*
+-- 
+2.43.0
+

@@ -1,0 +1,30 @@
+From 7aa3a97b08d891d93b01610811debda205beac2b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:32 +0200
+Subject: [PATCH] pal: Android.bp fix
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     Android.bp | 1 -
+     1 file changed, 1 deletion(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ Android.bp | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/Android.bp b/Android.bp
+index a83b5175e..0f3489ae3 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -26,7 +26,6 @@ cc_library_shared {
+         "-D_ANDROID_",
+         "-D_GNU_SOURCE",
+         "-DACD_SM_FILEPATH=\"/vendor/etc/models/acd/\"",
+-        "-DADSP_SLEEP_MONITOR",
+         "-DCONFIG_GSL",
+         "-Wall",
+         "-Werror",
+-- 
+2.43.0
+

@@ -1,0 +1,199 @@
+From 5cadc06de5ba5f0621244acd397b252180dc0ad3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:30 +0200
+Subject: [PATCH] cupid: SystemUI keyguard carrier ellipsize/sections,
+ AudioService volume steps
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     .../ui/view/layout/sections/KeyguardSliceViewSection.kt         | 10 +++++++++-
+     .../ui/view/layout/sections/KeyguardWeatherViewSection.kt       |  9 +++++++++
+     .../keyguard/ui/view/layout/sections/SmartspaceSection.kt       | 31 ++++++++++++++++++++++++++---
+     services/core/java/com/android/server/audio/AudioService.java   | 31 ++++++++++++++++++++++++++---
+     4 files changed, 74 insertions(+), 7 deletions(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ .../sections/KeyguardSliceViewSection.kt      | 10 +++++-
+ .../sections/KeyguardWeatherViewSection.kt    |  9 ++++++
+ .../view/layout/sections/SmartspaceSection.kt | 31 +++++++++++++++++--
+ .../android/server/audio/AudioService.java    | 31 +++++++++++++++++--
+ 4 files changed, 74 insertions(+), 7 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/KeyguardSliceViewSection.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/KeyguardSliceViewSection.kt
+index 77cd11a86de9..542137418883 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/KeyguardSliceViewSection.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/KeyguardSliceViewSection.kt
+@@ -37,6 +37,7 @@ import com.android.systemui.plugins.ActivityStarter
+ import com.android.systemui.plugins.keyguard.ui.clocks.ClockViewIds
+ import com.android.systemui.power.domain.interactor.PowerInteractor
+ import com.android.systemui.res.R
++import com.android.systemui.shared.R as sharedR
+ import com.android.systemui.settings.DisplayTracker
+ import com.android.systemui.shade.ShadeDisplayAware
+ import com.android.systemui.statusbar.lockscreen.LockscreenSmartspaceController
+@@ -133,7 +134,14 @@ constructor(
+                     R.id.smart_space_barrier_bottom,
+                     Barrier.BOTTOM,
+                     0,
+-                    *intArrayOf(R.id.keyguard_slice_view),
++                    // Ver KeyguardWeatherViewSection: con solo keyguard_slice_view
++                    // la barrera se colapsa arriba si esa vista esta oculta.
++                    *intArrayOf(
++                        R.id.keyguard_slice_view,
++                        sharedR.id.date_smartspace_view,
++                        sharedR.id.bc_smartspace_view,
++                        ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL,
++                    ),
+                 )
+             } else {
+                 createBarrier(
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/KeyguardWeatherViewSection.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/KeyguardWeatherViewSection.kt
+index 3e3319dccae5..dc18567c4f92 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/KeyguardWeatherViewSection.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/KeyguardWeatherViewSection.kt
+@@ -23,7 +23,9 @@ import androidx.constraintlayout.widget.ConstraintLayout
+ import androidx.constraintlayout.widget.ConstraintSet
+ import com.android.systemui.customization.clocks.R as custR
+ import com.android.systemui.keyguard.shared.model.KeyguardSection
++import com.android.systemui.plugins.keyguard.ui.clocks.ClockViewIds
+ import com.android.systemui.res.R
++import com.android.systemui.shared.R as sharedR
+ import com.android.systemui.weather.WeatherImageView
+ import com.android.systemui.weather.WeatherTextView
+ import javax.inject.Inject
+@@ -158,6 +160,13 @@ class KeyguardWeatherViewSection @Inject constructor(
+                 Barrier.BOTTOM,
+                 0,
+                 *intArrayOf(
++                    // Vistas estandar del smartspace y del reloj: sin ellas esta
++                    // barrera se colapsa arriba cuando las funciones propias de
++                    // Evolution estan desactivadas, y las notificaciones (con el
++                    // reproductor de multimedia dentro) tapan el reloj.
++                    sharedR.id.date_smartspace_view,
++                    sharedR.id.bc_smartspace_view,
++                    ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL,
+                     R.id.keyguard_slice_view,
+                     R.id.keyguard_weather,
+                     R.id.default_weather_image,
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/SmartspaceSection.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/SmartspaceSection.kt
+index 8d4f2719ae27..3fd216346490 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/SmartspaceSection.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/SmartspaceSection.kt
+@@ -283,11 +283,19 @@ constructor(
+             }
+ 
+             if (dateWeatherBelowSmallClock || !dateWeatherBelowLargeClock) {
++                // El reloj pequeno entra tambien aqui: si bc_smartspace_view y
++                // date_smartspace_view estan ocultas, la barrera se colapsaria
++                // arriba y la pila de notificaciones (que contiene el
++                // reproductor de multimedia) se dibujaria sobre el reloj.
+                 createBarrier(
+                     R.id.smart_space_barrier_bottom,
+                     Barrier.BOTTOM,
+                     0,
+-                    *intArrayOf(sharedR.id.bc_smartspace_view, sharedR.id.date_smartspace_view),
++                    *intArrayOf(
++                        sharedR.id.bc_smartspace_view,
++                        sharedR.id.date_smartspace_view,
++                        ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL,
++                    ),
+                 )
+                 createBarrier(
+                     R.id.smart_space_barrier_top,
+@@ -296,17 +304,34 @@ constructor(
+                     *intArrayOf(sharedR.id.bc_smartspace_view, sharedR.id.date_smartspace_view),
+                 )
+             } else {
++                // No basta con bc_smartspace_view: un Barrier ignora las vistas
++                // GONE, y esa tarjeta ("A un vistazo") suele estarlo porque
++                // Google no siempre tiene nada que mostrar. Al colapsarse la
++                // barrera contra el borde superior, la pila de notificaciones,
++                // las notificaciones promocionadas y la fila de iconos -- que
++                // cuelgan de ella -- se dibujaban encima del reloj.
++                // Se anaden la fila de fecha/tiempo, que en esta rama va al lado
++                // del reloj y si esta visible, y el reloj pequeno como ultimo
++                // recurso. Barrier.BOTTOM toma el maximo de los bordes
++                // inferiores visibles: anadir referencias nunca sube la barrera.
+                 createBarrier(
+                     R.id.smart_space_barrier_bottom,
+                     Barrier.BOTTOM,
+                     0,
+-                    sharedR.id.bc_smartspace_view,
++                    *intArrayOf(
++                        sharedR.id.bc_smartspace_view,
++                        sharedR.id.date_smartspace_view,
++                        ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL,
++                    ),
+                 )
+                 createBarrier(
+                     R.id.smart_space_barrier_top,
+                     Barrier.TOP,
+                     0,
+-                    sharedR.id.bc_smartspace_view,
++                    *intArrayOf(
++                        sharedR.id.bc_smartspace_view,
++                        sharedR.id.date_smartspace_view,
++                    ),
+                 )
+             }
+         }
+diff --git a/services/core/java/com/android/server/audio/AudioService.java b/services/core/java/com/android/server/audio/AudioService.java
+index cad3065678d1..77ab906fbb02 100644
+--- a/services/core/java/com/android/server/audio/AudioService.java
++++ b/services/core/java/com/android/server/audio/AudioService.java
+@@ -11015,6 +11015,15 @@ public class AudioService extends IAudioService.Stub
+                         mIsMuted = isMuted;
+                     }
+                 }
++                // EvoX: initialize the DEVICE_OUT_DEFAULT fallback from the speaker index so
++                // playback that falls back to the default device matches the user's Settings
++                // value from boot (avoids occasional loud notifications/ring on cold audio path).
++                if (mStreamType != AudioSystem.STREAM_SYSTEM
++                        && mStreamType != AudioSystem.STREAM_SYSTEM_ENFORCED
++                        && mIndexMap.indexOfKey(AudioSystem.DEVICE_OUT_SPEAKER) >= 0) {
++                    mIndexMap.put(AudioSystem.DEVICE_OUT_DEFAULT,
++                            mIndexMap.get(AudioSystem.DEVICE_OUT_SPEAKER));
++                }
+             }
+         }
+ 
+@@ -11132,6 +11141,13 @@ public class AudioService extends IAudioService.Stub
+                         index = mIndexMax;
+                     }
+                     mIndexMap.put(device, index);
++                    // EvoX: keep the DEVICE_OUT_DEFAULT fallback in sync with the loudspeaker
++                    // index so the Settings volume slider also controls playback that falls back
++                    // to the default device (fixes occasional loud notifications/ring when the
++                    // default index stays at its hardcoded high value).
++                    if (device == AudioSystem.DEVICE_OUT_SPEAKER) {
++                        mIndexMap.put(AudioSystem.DEVICE_OUT_DEFAULT, index);
++                    }
+ 
+                     changed = oldIndex != index;
+                     // Apply change to all streams using this one as alias if:
+@@ -11275,9 +11291,18 @@ public class AudioService extends IAudioService.Stub
+         public int getIndex(int device) {
+             synchronized (mVolumeStateLock) {
+                 int index = mIndexMap.get(device, -1);
+-                if (index == -1) {
+-                    // there is always an entry for AudioSystem.DEVICE_OUT_DEFAULT
+-                    index = mIndexMap.get(AudioSystem.DEVICE_OUT_DEFAULT);
++                // EvoX: for the default/unconfigured output device, use the loudspeaker level
++                // (the volume the user controls in Settings) instead of the fixed default index,
++                // so transient/cold-path playback is not louder or quieter than expected
++                // (fixes occasional loud notifications and inconsistent media with screen off).
++                if (index == -1 || device == AudioSystem.DEVICE_OUT_DEFAULT) {
++                    int spk = mIndexMap.get(AudioSystem.DEVICE_OUT_SPEAKER, -1);
++                    if (spk != -1) {
++                        index = spk;
++                    } else if (index == -1) {
++                        // there is always an entry for AudioSystem.DEVICE_OUT_DEFAULT
++                        index = mIndexMap.get(AudioSystem.DEVICE_OUT_DEFAULT);
++                    }
+                 }
+                 return index;
+             }
+-- 
+2.43.0
+

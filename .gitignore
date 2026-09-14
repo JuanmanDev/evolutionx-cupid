@@ -1,0 +1,7 @@
+# Mirrors of the WSL git repos (each has its own .git)
+evolution-x-cupid/
+# flashable images
+Recovery_Images/
+# old scratch scripts from the Windows-side build attempts (Aug 2026)
+_legacy/
+*.log

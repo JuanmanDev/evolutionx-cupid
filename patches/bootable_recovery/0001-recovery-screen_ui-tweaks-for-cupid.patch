@@ -1,0 +1,72 @@
+From 4e3da3026a05b2c4ea8e37cc6e8467324d1b039e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:31 +0200
+Subject: [PATCH] recovery: screen_ui tweaks for cupid
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     recovery_ui/screen_ui.cpp | 28 +++++++++++++++++++++++++---
+     1 file changed, 25 insertions(+), 3 deletions(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ recovery_ui/screen_ui.cpp | 28 +++++++++++++++++++++++++---
+ 1 file changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/recovery_ui/screen_ui.cpp b/recovery_ui/screen_ui.cpp
+index 7637453d..ccfc128f 100644
+--- a/recovery_ui/screen_ui.cpp
++++ b/recovery_ui/screen_ui.cpp
+@@ -43,6 +43,8 @@
+ #include <android-base/logging.h>
+ #include <android-base/properties.h>
+ #include <android-base/stringprintf.h>
++#include <android-base/file.h>
++#include <android-base/parseint.h>
+ #include <android-base/strings.h>
+ 
+ #include <health/utils.h>
+@@ -954,6 +956,25 @@ void ScreenRecoveryUI::update_progress_locked() {
+   gr_flip();
+ }
+ 
++// Lee el porcentaje de bateria del kernel. Devuelve -1 si no lo encuentra.
++// Hace falta porque el monitor de bateria no siempre esta disponible en
++// recovery ni en fastbootd, y sin esto se acababa ensenando un 100 % fijo.
++static int LeerCapacidadDelKernel() {
++  static const char* kSitios[] = {
++    "/sys/class/power_supply/battery/capacity",
++    "/sys/class/power_supply/bms/capacity",
++    "/sys/class/power_supply/Battery/capacity",
++  };
++  for (const char* sitio : kSitios) {
++    std::string texto;
++    if (!android::base::ReadFileToString(sitio, &texto)) continue;
++    int valor = 0;
++    if (!android::base::ParseInt(android::base::Trim(texto), &valor)) continue;
++    if (valor >= 0 && valor <= 100) return valor;
++  }
++  return -1;
++}
++
+ void ScreenRecoveryUI::BattMonitorThreadLoop() {
+   using aidl::android::hardware::health::BatteryStatus;
+   using android::hardware::health::InitHealthdConfig;
+@@ -997,10 +1018,11 @@ void ScreenRecoveryUI::BattMonitorThreadLoop() {
+       }
+       is_first_call = false;
+ 
+-      // If we can't read battery percentage, it may be a device without battery. In this
+-      // situation, use 100 as a fake battery percentage.
++      // Si el monitor no da el porcentaje, se mira lo que dice el kernel antes
++      // de dar por hecho que el aparato no tiene bateria.
+       if (status != android::OK) {
+-        prop.valueInt64 = 100;
++        int delKernel = LeerCapacidadDelKernel();
++        prop.valueInt64 = (delKernel >= 0) ? delKernel : 100;
+       }
+ 
+       int32_t batt_capacity = static_cast<int32_t>(prop.valueInt64);
+-- 
+2.43.0
+

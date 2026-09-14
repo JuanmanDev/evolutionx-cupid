@@ -1,0 +1,40 @@
+From 2b467702e8dcc07236e5cf913e8337caca5f1b80 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:28 +0200
+Subject: [PATCH] vintf: add vendor.xiaomi.hardware.misys to framework
+ compatibility matrix
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     vintf/xiaomi_framework_compatibility_matrix.xml | 10 ++++++++++
+     1 file changed, 10 insertions(+)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ vintf/xiaomi_framework_compatibility_matrix.xml | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/vintf/xiaomi_framework_compatibility_matrix.xml b/vintf/xiaomi_framework_compatibility_matrix.xml
+index 376cd62..38fda46 100644
+--- a/vintf/xiaomi_framework_compatibility_matrix.xml
++++ b/vintf/xiaomi_framework_compatibility_matrix.xml
+@@ -253,6 +253,16 @@
+             <instance>default</instance>
+         </interface>
+     </hal>
++    <hal format="hidl" optional="true">
++        <name>vendor.xiaomi.hardware.misys</name>
++        <version>1.0</version>
++        <version>2.0</version>
++        <version>3.0</version>
++        <interface>
++            <name>IMiSys</name>
++            <instance>default</instance>
++        </interface>
++    </hal>
+     <hal format="aidl" optional="true">
+         <name>vendor.xiaomi.hardware.mlipay</name>
+         <interface>
+-- 
+2.43.0
+

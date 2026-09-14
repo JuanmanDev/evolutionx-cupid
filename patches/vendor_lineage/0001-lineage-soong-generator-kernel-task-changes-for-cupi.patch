@@ -1,0 +1,141 @@
+From 85d254db088d3a4a0a359e9825ab82d1e4cb33ca Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:31 +0200
+Subject: [PATCH] lineage: soong generator/kernel task changes for cupid
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     build/soong/Android.bp             | 12 ++++++------
+     build/soong/generator/generator.go |  8 ++++----
+     build/soong/generator/variables.go |  5 ++++-
+     build/tasks/kernel.mk              |  8 +++++++-
+     4 files changed, 21 insertions(+), 12 deletions(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ build/soong/Android.bp             | 12 ++++++------
+ build/soong/generator/generator.go |  8 ++++----
+ build/soong/generator/variables.go |  5 ++++-
+ build/tasks/kernel.mk              |  8 +++++++-
+ 4 files changed, 21 insertions(+), 12 deletions(-)
+
+diff --git a/build/soong/Android.bp b/build/soong/Android.bp
+index 37cace00..a26fc8ed 100644
+--- a/build/soong/Android.bp
++++ b/build/soong/Android.bp
+@@ -23,17 +23,17 @@ lineage_generator {
+ 
+     // The headers make command
+     cmd: "set -e; " +
+-         "(cd $(KERNEL_BUILD_OUT_PREFIX).; " +
++         "(cd ./.; " +
+          "if [ -n \"$(TARGET_KERNEL_PLATFORM_TARGET)\" ]; then " +
+          "    pushd $(KERNEL_PATH); " +
+-         "    ./tools/bazel --output_user_root=$(KERNEL_BUILD_OUT_PREFIX)$(genDir)/bazel-out --output_root=$(KERNEL_BUILD_OUT_PREFIX)$(genDir)/bazel-out run --experimental_convenience_symlinks=ignore --cpu=$(KERNEL_ARCH) //$(TARGET_KERNEL_SOURCE):$(TARGET_KERNEL_PLATFORM_TARGET)_uapi_headers_dist -- --destdir=$(KERNEL_BUILD_OUT_PREFIX)$(genDir); " +
++         "    ./tools/bazel --output_user_root=./$(genDir)/bazel-out --output_root=./$(genDir)/bazel-out run --experimental_convenience_symlinks=ignore --cpu=$(KERNEL_ARCH) //$(TARGET_KERNEL_SOURCE):$(TARGET_KERNEL_PLATFORM_TARGET)_uapi_headers_dist -- --destdir=./$(genDir); " +
+          "    popd; " +
+          "    gzip -d $(genDir)/kernel-uapi-headers.tar.gz; " +
+          "    tar -xf $(genDir)/kernel-uapi-headers.tar -C $(genDir); " +
+          "else " +
+-         "    $(PATH_OVERRIDE_SOONG) $(KERNEL_MAKE_CMD) $(KERNEL_MAKE_FLAGS) -C $(TARGET_KERNEL_SOURCE) O=$(KERNEL_BUILD_OUT_PREFIX)$(genDir) ARCH=$(KERNEL_ARCH) $(KERNEL_CROSS_COMPILE) headers_install; " +
++         "    prebuilts/build-tools/linux-x86/bin/make LLVM=1 LLVM_IAS=1 CC=clang HOSTCC=clang HOSTCXX=clang++ HOSTLD=ld.lld -C kernel/xiaomi/sm8450 O=./$(genDir) ARCH=arm64 headers_install; " +
+          "fi; " +
+-         "vendor/lineage/tools/clean_headers.sh $(KERNEL_BUILD_OUT_PREFIX)$(genDir))",
++         "vendor/lineage/tools/clean_headers.sh ./$(genDir))",
+ 
+     // Directories that can be imported by a cc_* module generated_headers property
+     export_include_dirs: [
+@@ -59,8 +59,8 @@ lineage_generator {
+ 
+     // The headers extract command
+     cmd: "set -e; " +
+-         "(cd $(KERNEL_BUILD_OUT_PREFIX).; " +
+-         "mkdir -p $(genDir) && gzip -d < $(TARGET_PREBUILT_KERNEL_HEADERS) | tar -x -C $(genDir) && vendor/lineage/tools/clean_headers.sh $(KERNEL_BUILD_OUT_PREFIX)$(genDir))",
++         "(cd ./.; " +
++         "mkdir -p $(genDir) && gzip -d < $(TARGET_PREBUILT_KERNEL_HEADERS) | tar -x -C $(genDir) && vendor/lineage/tools/clean_headers.sh ./$(genDir))",
+ 
+     // Directories that can be imported by a cc_* module generated_headers property
+     export_include_dirs: [
+diff --git a/build/soong/generator/generator.go b/build/soong/generator/generator.go
+index c70ef5f0..26fe2a6d 100644
+--- a/build/soong/generator/generator.go
++++ b/build/soong/generator/generator.go
+@@ -258,11 +258,11 @@ func (g *Module) GenerateAndroidBuildActions(ctx android.ModuleContext) {
+ 	// Dummy output dep
+ 	dummyDep := android.PathForModuleGen(ctx, ".dummy_dep")
+ 
+-	genDir := android.PathForModuleGen(ctx)
+-	manifestPath := android.PathForModuleOut(ctx, "generator.sbox.textproto")
++	// genDir := android.PathForModuleGen(ctx)
++	// manifestPath := android.PathForModuleOut(ctx, "generator.sbox.textproto")
+ 
+-	// Use a RuleBuilder to create a rule that runs the command inside an sbox sandbox.
+-	rule := android.NewRuleBuilder(pctx, ctx).Sbox(genDir, manifestPath)
++	// Use a RuleBuilder to create a rule that runs the command.
++	rule := android.NewRuleBuilder(pctx, ctx)
+ 
+ 	rule.Command().
+ 		Text(rawCommand).
+diff --git a/build/soong/generator/variables.go b/build/soong/generator/variables.go
+index 8485f94b..dc3ae2cb 100644
+--- a/build/soong/generator/variables.go
++++ b/build/soong/generator/variables.go
+@@ -16,7 +16,10 @@ func lineageExpandVariables(ctx android.ModuleContext, in string) string {
+ 		// This variable is not for us, restore what the original
+ 		// variable string will have looked like for an Expand
+ 		// that comes later.
+-		return fmt.Sprintf("$(%s)", name), nil
++		if name == "genDir" || name == "in" || name == "out" || name == "location" {
++			return fmt.Sprintf("$(%s)", name), nil
++		}
++		return "", nil
+ 	})
+ 
+ 	if err != nil {
+diff --git a/build/tasks/kernel.mk b/build/tasks/kernel.mk
+index f442f161..682d81ff 100644
+--- a/build/tasks/kernel.mk
++++ b/build/tasks/kernel.mk
+@@ -16,6 +16,7 @@
+ 
+ # Android makefile to build kernel as a part of Android Build
+ #
++BUILD_TOP := $(abspath .)
+ # Configuration
+ # =============
+ #
+@@ -123,6 +124,7 @@ BOARD_RECOVERY_KERNEL_MODULES_LOAD ?= $(BOARD_RECOVERY_RAMDISK_KERNEL_MODULES_LO
+ TARGET_KERNEL_MIXED_MODE ?= true
+ 
+ ## Internal variables
++KERNEL_BUILD_OUT_PREFIX := $(BUILD_TOP)/
+ COLLECT_MODULE_DEPS_CMD := python3 $(BUILD_TOP)/lineage/scripts/collect-kernel-module-deps/collect-kernel-module-deps.py --non-interactive
+ DTC := $(HOST_OUT_EXECUTABLES)/dtc
+ KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
+@@ -259,11 +261,13 @@ else ifeq ($(KERNEL_ARCH),arm)
+ else ifeq ($(KERNEL_ARCH),x86)
+     KERNEL_CLANG_TRIPLE ?= CLANG_TRIPLE=x86_64-linux-gnu-
+ endif
++TARGET_KERNEL_CLANG_PATH ?= $(BUILD_TOP)/prebuilts/clang/host/linux-x86/clang-r596125
+ PATH_OVERRIDE += LD_LIBRARY_PATH=$(TARGET_KERNEL_CLANG_PATH)/lib64:$$LD_LIBRARY_PATH
+ PATH_OVERRIDE += PATH=$(TARGET_KERNEL_CLANG_PATH)/bin:$$PATH
+ ifeq ($(KERNEL_CC),)
+-    KERNEL_CC := CC="$(CCACHE_BIN) clang" LD=ld.lld
++    KERNEL_CC := CC="$(if $(CCACHE_BIN),$(CCACHE_BIN) )clang" LD=ld.lld HOSTCC="clang" HOSTCXX="clang++" HOSTLD="ld.lld"
+ endif
++KERNEL_MAKE_CMD := prebuilts/build-tools/linux-x86/bin/make
+ 
+ # System tools are no longer allowed on 10+
+ PATH_OVERRIDE += $(TOOLS_PATH_OVERRIDE)
+@@ -276,6 +280,8 @@ ifneq ($(TARGET_KERNEL_ADDITIONAL_FLAGS),)
+     KERNEL_MAKE_FLAGS += $(TARGET_KERNEL_ADDITIONAL_FLAGS)
+ endif
+ 
++KERNEL_MAKE_FLAGS += LLVM=1 LLVM_IAS=1 LEX=$(BUILD_TOP)/prebuilts/build-tools/linux-x86/bin/flex YACC=$(BUILD_TOP)/prebuilts/build-tools/linux-x86/bin/bison M4=$(BUILD_TOP)/prebuilts/build-tools/linux-x86/bin/m4
++
+ # Internal implementation of make-kernel-target
+ # $(1): output path (The value passed to O=)
+ # $(2): target to build (eg. defconfig, modules, dtbo.img)
+-- 
+2.43.0
+

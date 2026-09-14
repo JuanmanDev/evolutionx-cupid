@@ -1,0 +1,1153 @@
+From 9d22078ca8392896b776b05c89866b9e8ddbb6df Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:30 +0200
+Subject: [PATCH] cupid: camera service fixes for Xiaomi HAL (provider
+ enumeration, 50 MP streams), volume curve
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     services/audiopolicy/config/audio_policy_volumes.xml            |  19 +-
+     services/camera/libcameraservice/CameraService.cpp              |  50 +++
+     .../camera/libcameraservice/common/CameraProviderManager.cpp    | 486 ++++++++++++++++++++++++++++
+     services/camera/libcameraservice/common/CameraProviderManager.h |  11 +
+     .../camera/libcameraservice/common/aidl/AidlProviderInfo.cpp    |  10 +
+     .../camera/libcameraservice/common/hidl/HidlProviderInfo.cpp    |  15 +
+     services/camera/libcameraservice/device3/Camera3Device.cpp      | 217 +++++++++++++
+     services/camera/libcameraservice/device3/Camera3Device.h        |  11 +
+     .../camera/libcameraservice/device3/Camera3OutputStream.cpp     |  16 +
+     services/camera/libcameraservice/device3/Camera3OutputUtils.cpp |  75 +++++
+     10 files changed, 904 insertions(+), 6 deletions(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ .../config/audio_policy_volumes.xml           |  19 +-
+ .../camera/libcameraservice/CameraService.cpp |  50 ++
+ .../common/CameraProviderManager.cpp          | 486 ++++++++++++++++++
+ .../common/CameraProviderManager.h            |  11 +
+ .../common/aidl/AidlProviderInfo.cpp          |  10 +
+ .../common/hidl/HidlProviderInfo.cpp          |  15 +
+ .../device3/Camera3Device.cpp                 | 217 ++++++++
+ .../libcameraservice/device3/Camera3Device.h  |  11 +
+ .../device3/Camera3OutputStream.cpp           |  16 +
+ .../device3/Camera3OutputUtils.cpp            |  75 +++
+ 10 files changed, 904 insertions(+), 6 deletions(-)
+
+diff --git a/services/audiopolicy/config/audio_policy_volumes.xml b/services/audiopolicy/config/audio_policy_volumes.xml
+index 22af99db6f..fd779a3814 100644
+--- a/services/audiopolicy/config/audio_policy_volumes.xml
++++ b/services/audiopolicy/config/audio_policy_volumes.xml
+@@ -62,8 +62,9 @@ volume index from 0 to 100.
+     <volume stream="AUDIO_STREAM_RING" deviceCategory="DEVICE_CATEGORY_HEADSET"
+                                        ref="DEFAULT_DEVICE_CATEGORY_HEADSET_VOLUME_CURVE"/>
+     <volume stream="AUDIO_STREAM_RING" deviceCategory="DEVICE_CATEGORY_SPEAKER">
+-        <point>1,-2970</point>
+-        <point>33,-2010</point>
++        <point>1,-9000</point>
++        <point>20,-4600</point>
++        <point>40,-2200</point>
+         <point>66,-1020</point>
+         <point>100,0</point>
+     </volume>
+@@ -75,8 +76,13 @@ volume index from 0 to 100.
+                                        ref="DEFAULT_HEARING_AID_VOLUME_CURVE"/>
+     <volume stream="AUDIO_STREAM_MUSIC" deviceCategory="DEVICE_CATEGORY_HEADSET"
+                                         ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+-    <volume stream="AUDIO_STREAM_MUSIC" deviceCategory="DEVICE_CATEGORY_SPEAKER"
+-                                        ref="DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE"/>
++    <volume stream="AUDIO_STREAM_MUSIC" deviceCategory="DEVICE_CATEGORY_SPEAKER">
++        <point>1,-9600</point>
++        <point>20,-4600</point>
++        <point>40,-3000</point>
++        <point>66,-1400</point>
++        <point>100,0</point>
++    </volume>
+     <volume stream="AUDIO_STREAM_MUSIC" deviceCategory="DEVICE_CATEGORY_EARPIECE"
+                                         ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+     <volume stream="AUDIO_STREAM_MUSIC" deviceCategory="DEVICE_CATEGORY_EXT_MEDIA"
+@@ -100,8 +106,9 @@ volume index from 0 to 100.
+     <volume stream="AUDIO_STREAM_NOTIFICATION" deviceCategory="DEVICE_CATEGORY_HEADSET"
+                                                ref="DEFAULT_DEVICE_CATEGORY_HEADSET_VOLUME_CURVE"/>
+     <volume stream="AUDIO_STREAM_NOTIFICATION" deviceCategory="DEVICE_CATEGORY_SPEAKER">
+-        <point>1,-2970</point>
+-        <point>33,-2010</point>
++        <point>1,-9000</point>
++        <point>20,-4600</point>
++        <point>40,-2200</point>
+         <point>66,-1020</point>
+         <point>100,0</point>
+     </volume>
+diff --git a/services/camera/libcameraservice/CameraService.cpp b/services/camera/libcameraservice/CameraService.cpp
+index eda51932eb..5b59763a1f 100644
+--- a/services/camera/libcameraservice/CameraService.cpp
++++ b/services/camera/libcameraservice/CameraService.cpp
+@@ -1390,6 +1390,38 @@ std::string CameraService::cameraIdIntToStr(int cameraIdInt, int32_t deviceId,
+     return cameraIdIntToStrLocked(cameraIdInt, deviceId, devicePolicy);
+ }
+ 
++// Los paquetes a los que se les ensena el tamano completo del sensor.
++//
++// Se lee la misma propiedad que usa el HAL para decidir a quien le entrega
++// resolucion completa, para que las dos capas no puedan discrepar. Vacia o sin
++// definir, no se le ensena a nadie y todo queda como de fabrica.
++static bool paqueteQuiereResolucionCompleta(const std::string& paquete) {
++    if (paquete.empty()) {
++        return false;
++    }
++
++    char lista[PROPERTY_VALUE_MAX] = {0};
++    property_get("persist.vendor.camera.privapp.list", lista, "");
++    if (lista[0] == 0) {
++        return false;
++    }
++
++    // La propiedad es una lista separada por comas.
++    const std::string texto(lista);
++    size_t desde = 0;
++    while (desde <= texto.size()) {
++        size_t coma = texto.find(",", desde);
++        if (coma == std::string::npos) {
++            coma = texto.size();
++        }
++        if (texto.compare(desde, coma - desde, paquete) == 0) {
++            return true;
++        }
++        desde = coma + 1;
++    }
++    return false;
++}
++
+ Status CameraService::getCameraCharacteristics(const std::string& unresolvedCameraId,
+         int targetSdkVersion, const CameraCompatibilityInfo& compatInfo,
+         const AttributionSourceState& clientAttribution, int32_t devicePolicy,
+@@ -1447,6 +1479,24 @@ Status CameraService::getCameraCharacteristics(const std::string& unresolvedCame
+         }
+     }
+ 
++    // El sensor de este movil da 8192x6144, pero el HAL no anuncia ningun tamano
++    // de foto por encima de 4208x3120. Sin un tamano grande a la vista, la
++    // camara de Xiaomi no encuentra ninguno y acaba guardando a 1440x1080.
++    //
++    // No se puede anunciar a todo el mundo: los ports de Google Camera lo
++    // eligen y el HAL les rechaza la configuracion de flujos entera, con lo que
++    // se quedan con la vista previa en negro:
++    //     configure_streams() max_buffers : 0
++    //     Camera3-Device: Unable to configure stream 0 queue
++    //
++    // Se le ensena solo a los paquetes de persist.vendor.camera.privapp.list,
++    // que es la misma lista con la que el HAL decide a quien le entrega
++    // resolucion completa. Quien no este en ella ve las caracteristicas de
++    // siempre.
++    if (paqueteQuiereResolucionCompleta(clientAttribution.packageName.value_or(""))) {
++        CameraProviderManager::aplicarJpegCompletoQuadCfa(*cameraInfo, cameraId);
++    }
++
+     return filterSensitiveMetadataIfNeeded(cameraId, cameraInfo);
+ }
+ 
+diff --git a/services/camera/libcameraservice/common/CameraProviderManager.cpp b/services/camera/libcameraservice/common/CameraProviderManager.cpp
+index 9fb20a9672..efe67f69bb 100644
+--- a/services/camera/libcameraservice/common/CameraProviderManager.cpp
++++ b/services/camera/libcameraservice/common/CameraProviderManager.cpp
+@@ -22,6 +22,7 @@
+ //#define LOG_NDEBUG 0
+ 
+ #include "CameraProviderManager.h"
++#include <camera/VendorTagDescriptor.h>
+ 
+ #include "config/SharedSessionConfigReader.h"
+ 
+@@ -1926,6 +1927,491 @@ status_t CameraProviderManager::ProviderInfo::DeviceInfo3::fixupMonochromeTags()
+     return res;
+ }
+ 
++// Anade el tamano completo del sensor al mapa de configuraciones, como BLOB
++// y con sus duraciones.
++//
++// Va aparte de la caracteristica global a proposito: no todas las aplicaciones
++// lo quieren. Los ports de Google Camera se quedan en negro si lo ven, porque
++// el HAL les rechaza la configuracion de flujos entera:
++//     configure_streams() max_buffers : 0
++//     Camera3-Device: Can.t finish configuring output stream 0
++// Por eso CameraService solo se lo aplica a los paquetes que salen en
++// persist.vendor.camera.privapp.list, que es la misma lista con la que el HAL
++// decide a quien entrega resolucion completa.
++status_t CameraProviderManager::aplicarJpegCompletoQuadCfa(CameraMetadata& chars,
++        const std::string& idCamara) {
++    // El HAL de este movil (sensor Quad-Bayer) no anuncia ningun tamano de foto
++    // por encima de 4208x3120, aunque el sensor da 8192x6144 y el propio HAL
++    // acepta ese tamano si se le pide: comprobado con una sesion normal, sin
++    // modos propietarios. Sin el anuncio, las apps no pueden ofrecerlo (CameraX
++    // solo propone tamanos publicados) o se cierran al intentarlo.
++    //
++    // Aqui se anade ese tamano al mapa de configuraciones como BLOB, con sus
++    // duraciones.
++    //
++    // Viene apagado por defecto y no es un descuido: con el encendido, CameraX
++    // detecta el tamano y lo elige (baja la previa a 1600x1200 y limita a 3
++    // fps), pero al disparar se muere el HAL de camara
++    //     CAM-CRM: cam_req_mgr_close: ... userspace process has died
++    //     cameraserver: Camera provider 'legacy/1-3' has died
++    // porque reserva cuatro imagenes de 8192x6144 (unos 400 MB) y el HAL no lo
++    // aguanta. Una app que pida una sola imagen a resolucion completa si
++    // funciona, y por eso se deja la posibilidad de encenderlo:
++    //     setprop persist.sys.camera.qcfa_jpeg 1
++
++    // Las medidas del mosaico completo salen de la etiqueta de Qualcomm, que el
++    // HAL rellena aunque luego no publique ese tamano de foto. Es la fuente
++    // buena: la camara principal de este movil no se declara de ultra alta
++    // resolucion, asi que mirar la capacidad dejaba fuera justo la que
++    // interesa.
++    int32_t fullWidth = 0;
++    int32_t fullHeight = 0;
++
++    sp<VendorTagDescriptor> vTags;
++    sp<VendorTagDescriptorCache> vCache = VendorTagDescriptorCache::getGlobalVendorTagCache();
++    if (vCache.get() != nullptr) {
++        const camera_metadata_t *buffer = chars.getAndLock();
++        metadata_vendor_id_t vendorId = get_camera_metadata_vendor_id(buffer);
++        chars.unlock(buffer);
++        vCache->getVendorTagDescriptor(vendorId, &vTags);
++    }
++    uint32_t qcfaTag = 0;
++    if (CameraMetadata::getTagFromName(
++            "org.codeaurora.qcamera3.quadra_cfa.qcfa_dimension", vTags.get(), &qcfaTag) == OK) {
++        auto qcfa = chars.find(qcfaTag);
++        if (qcfa.count == 2) {
++            fullWidth = qcfa.data.i32[0];
++            fullHeight = qcfa.data.i32[1];
++            ALOGI("%s: el mosaico completo mide %dx%d segun el HAL",
++                    __FUNCTION__, fullWidth, fullHeight);
++        }
++    }
++
++    // Si no esta la etiqueta, vale igual lo que diga el sensor de si mismo. No
++    // se pide ademas que la camara se declare de ultra alta resolucion: la
++    // principal de este movil no lo hace y es justo la que interesa, porque es
++    // la unica que ven las aplicaciones.
++    if (fullWidth <= 0 || fullHeight <= 0) {
++        auto fullSize = chars.find(
++                ANDROID_SENSOR_INFO_PIXEL_ARRAY_SIZE_MAXIMUM_RESOLUTION);
++        if (fullSize.count != 2) {
++            return OK;
++        }
++        fullWidth = fullSize.data.i32[0];
++        fullHeight = fullSize.data.i32[1];
++        ALOGI("%s: el sensor dice medir %dx%d a resolucion completa",
++                __FUNCTION__, fullWidth, fullHeight);
++    }
++    if (fullWidth <= 0 || fullHeight <= 0) {
++        return OK;
++    }
++
++    auto configs = chars.find(ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS);
++    if (configs.count == 0) {
++        return OK;
++    }
++
++    // Si ya estuviera anunciado, no hay nada que hacer.
++    for (size_t i = 0; i + 3 < configs.count; i += 4) {
++        if (configs.data.i32[i] == HAL_PIXEL_FORMAT_BLOB &&
++                configs.data.i32[i + 1] == fullWidth &&
++                configs.data.i32[i + 2] == fullHeight) {
++            return OK;
++        }
++    }
++
++    // El JPEG a resolucion completa hace falta siempre: sin el, la camara de
++    // Xiaomi no encuentra ningun tamano grande en getOutputSizes() y se queda
++    // en 1440x1080, que es lo que acaba guardando.
++    //
++    // El RAW va aparte y apagado por defecto. Anunciarlo tiene un efecto
++    // secundario medido: los ports de Google Camera eligen RAW a resolucion
++    // completa para la lente principal y se quedan en negro, porque su tuberia
++    // necesita RAW o YUV a ese tamano y el YUV completo mata al HAL. Quien
++    // quiera el RAW grande, que lo encienda a proposito:
++    //
++    //     setprop persist.sys.camera.qcfa_raw 1
++    std::vector<int32_t> kFormatos;
++    kFormatos.push_back(HAL_PIXEL_FORMAT_BLOB);         // el JPEG de siempre
++    if (property_get_int32("persist.sys.camera.qcfa_raw", 0) != 0) {
++        kFormatos.push_back(HAL_PIXEL_FORMAT_RAW16);    // RAW_SENSOR, el de DngCreator
++        kFormatos.push_back(HAL_PIXEL_FORMAT_RAW10);    // el que piden los ports de GCam
++    }
++
++    std::vector<int32_t> newConfigs(configs.data.i32, configs.data.i32 + configs.count);
++    for (int32_t formato : kFormatos) {
++        bool yaEsta = false;
++        for (size_t i = 0; i + 3 < configs.count; i += 4) {
++            if (configs.data.i32[i] == formato &&
++                    configs.data.i32[i + 1] == fullWidth &&
++                    configs.data.i32[i + 2] == fullHeight &&
++                    configs.data.i32[i + 3] ==
++                            ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT) {
++                yaEsta = true;
++                break;
++            }
++        }
++        if (yaEsta) {
++            continue;
++        }
++        newConfigs.push_back(formato);
++        newConfigs.push_back(fullWidth);
++        newConfigs.push_back(fullHeight);
++        newConfigs.push_back(ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT);
++    }
++
++    // Las duraciones se copian de la foto mas grande que si estuviera anunciada,
++    // escaladas por la diferencia de area: es una estimacion prudente, y a las
++    // apps solo les sirve para decidir si pueden encadenar disparos.
++    auto minDurations = chars.find(
++            ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS);
++    auto stallDurations = chars.find(ANDROID_SCALER_AVAILABLE_STALL_DURATIONS);
++
++    int64_t refMinDuration = 0;
++    int64_t refStallDuration = 0;
++    int64_t refArea = 0;
++    for (size_t i = 0; i + 3 < minDurations.count; i += 4) {
++        if (minDurations.data.i64[i] != HAL_PIXEL_FORMAT_BLOB) continue;
++        int64_t area = minDurations.data.i64[i + 1] * minDurations.data.i64[i + 2];
++        if (area > refArea) {
++            refArea = area;
++            refMinDuration = minDurations.data.i64[i + 3];
++        }
++    }
++    for (size_t i = 0; i + 3 < stallDurations.count; i += 4) {
++        if (stallDurations.data.i64[i] != HAL_PIXEL_FORMAT_BLOB) continue;
++        int64_t area = stallDurations.data.i64[i + 1] * stallDurations.data.i64[i + 2];
++        if (area == refArea) {
++            refStallDuration = stallDurations.data.i64[i + 3];
++        }
++    }
++    if (refMinDuration <= 0) refMinDuration = 33333333;      // 30 por segundo
++    if (refStallDuration <= 0) refStallDuration = refMinDuration;
++
++    const int64_t fullArea = static_cast<int64_t>(fullWidth) * fullHeight;
++    const int64_t factor = (refArea > 0) ? std::max<int64_t>(1, fullArea / refArea) : 4;
++
++    std::vector<int64_t> newMinDurations(minDurations.data.i64,
++                                         minDurations.data.i64 + minDurations.count);
++    for (int32_t formato : kFormatos) {
++        if (formato == HAL_PIXEL_FORMAT_BLOB) {
++            continue;
++        }
++        newMinDurations.push_back(formato);
++        newMinDurations.push_back(fullWidth);
++        newMinDurations.push_back(fullHeight);
++        newMinDurations.push_back(std::min<int64_t>(refMinDuration, 33333333));
++    }
++    newMinDurations.push_back(HAL_PIXEL_FORMAT_BLOB);
++    newMinDurations.push_back(fullWidth);
++    newMinDurations.push_back(fullHeight);
++    // Ojo con este valor: Android aparta a una lista distinta
++    // (getHighResolutionOutputSizes) los tamanos que no dan al menos unos 20
++    // fotogramas por segundo, y getOutputSizes deja de mostrarlos. Como la
++    // mayoria de las aplicaciones solo miran getOutputSizes, un tamano lento se
++    // vuelve invisible para ellas. Se declara la misma duracion que la foto mas
++    // grande que el HAL si publica, para que salga en la lista de siempre.
++    // Por debajo del umbral de los 20 fotogramas por segundo a proposito.
++    // StreamConfigurationMap aparta a getHighResolutionOutputSizes todo lo que
++    // declare mas de 50 ms por fotograma, y getOutputSizes deja de mostrarlo;
++    // como casi ninguna aplicacion consulta esa segunda lista, el tamano se
++    // vuelve invisible. Le pasa de fabrica a 4208x3120, que el HAL si publica y
++    // que tampoco aparece en el mapa. Aqui interesa que se vea, asi que se
++    // declara una duracion que lo deje en la lista de siempre.
++    newMinDurations.push_back(std::min<int64_t>(refMinDuration, 33333333));
++
++    std::vector<int64_t> newStallDurations(stallDurations.data.i64,
++                                           stallDurations.data.i64 + stallDurations.count);
++    for (int32_t formato : kFormatos) {
++        if (formato == HAL_PIXEL_FORMAT_BLOB) {
++            continue;
++        }
++        newStallDurations.push_back(formato);
++        newStallDurations.push_back(fullWidth);
++        newStallDurations.push_back(fullHeight);
++        newStallDurations.push_back(refStallDuration * factor);
++    }
++    newStallDurations.push_back(HAL_PIXEL_FORMAT_BLOB);
++    newStallDurations.push_back(fullWidth);
++    newStallDurations.push_back(fullHeight);
++    newStallDurations.push_back(refStallDuration * factor);
++
++    // Las entradas que ya existian para este tamano (el HAL publica RAW a
++    // resolucion completa aunque no lo parezca) llevan duraciones tan largas
++    // que Android las aparta de la lista que consultan las aplicaciones. Se les
++    // baja la duracion entre fotogramas para que salgan a la vista.
++    for (size_t i = 0; i + 3 < newMinDurations.size(); i += 4) {
++        if (newMinDurations[i + 1] == fullWidth && newMinDurations[i + 2] == fullHeight &&
++                newMinDurations[i + 3] > 33333333) {
++            ALOGI("%s: el formato %lld a %dx%d pasa de %lld a 33 ms por fotograma",
++                    __FUNCTION__, (long long) newMinDurations[i], fullWidth, fullHeight,
++                    (long long) newMinDurations[i + 3]);
++            newMinDurations[i + 3] = 33333333;
++        }
++    }
++
++    chars.update(ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS,
++                                  newConfigs.data(), newConfigs.size());
++    chars.update(ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS,
++                                  newMinDurations.data(), newMinDurations.size());
++    chars.update(ANDROID_SCALER_AVAILABLE_STALL_DURATIONS,
++                                  newStallDurations.data(), newStallDurations.size());
++
++    // El tamano maximo de JPEG tiene que dar de sobra para una foto de este
++    // tamano. El HAL comprueba que el bufer que le pasan pueda contener el
++    // peor caso (imagen muy detallada, sin apenas compresion) y si no llega,
++    // aborta al mapearlo. Un primer intento con ancho x alto x 3/4 (unos 37 MB)
++    // se quedaba corto y seguia fallando; se pone el caso peor de verdad, que
++    // es un byte y medio por pixel, mas sitio para las cabeceras.
++    {
++        auto maxJpeg = chars.find(ANDROID_JPEG_MAX_SIZE);
++        if (maxJpeg.count == 1) {
++            int64_t holgado = (int64_t) fullWidth * fullHeight * 3 / 2 + (8 << 20);
++            int32_t estimado = (int32_t) std::min<int64_t>(holgado, INT32_MAX);
++            if (estimado > maxJpeg.data.i32[0]) {
++                ALOGI("%s: el tamano maximo de JPEG pasa de %d a %d bytes",
++                        __FUNCTION__, maxJpeg.data.i32[0], estimado);
++                chars.update(ANDROID_JPEG_MAX_SIZE, &estimado, 1);
++            }
++        }
++    }
++
++    ALOGI("%s: camara %s: anunciado %dx%d como tamano de foto (el HAL no lo publicaba)",
++          __FUNCTION__, idCamara.c_str(), fullWidth, fullHeight);
++    return OK;
++}
++
++// Baja la duracion declarada del RAW a resolucion completa, para que salga en
++// getOutputSizes() y no en la lista de alta resolucion.
++//
++// El HAL ya publica esos tamanos; lo unico que hace esto es que dejen de estar
++// escondidos. Se aplica a todas las aplicaciones, a diferencia del anuncio del
++// JPEG completo, que va por aplicacion.
++static void bajarDuracionRawCompleto(CameraMetadata& chars, const std::string& idCamara) {
++    if (property_get_int32("persist.sys.camera.qcfa_raw_global", 0) == 0) {
++        return;
++    }
++
++    auto pixelArray = chars.find(ANDROID_SENSOR_INFO_PIXEL_ARRAY_SIZE_MAXIMUM_RESOLUTION);
++    if (pixelArray.count < 2) {
++        return;
++    }
++    const int32_t anchoCompleto = pixelArray.data.i32[0];
++    const int32_t altoCompleto = pixelArray.data.i32[1];
++
++    const uint32_t etiquetas[] = {
++        ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS,
++        ANDROID_SCALER_AVAILABLE_STALL_DURATIONS,
++    };
++
++    for (uint32_t etiqueta : etiquetas) {
++        auto entrada = chars.find(etiqueta);
++        if (entrada.count == 0) continue;
++
++        std::vector<int64_t> nuevas(entrada.data.i64, entrada.data.i64 + entrada.count);
++        bool tocado = false;
++        for (size_t i = 0; i + 3 < nuevas.size(); i += 4) {
++            const int32_t formato = (int32_t) nuevas[i];
++            const bool esRaw = (formato == HAL_PIXEL_FORMAT_RAW10
++                    || formato == HAL_PIXEL_FORMAT_RAW12
++                    || formato == HAL_PIXEL_FORMAT_RAW16
++                    || formato == HAL_PIXEL_FORMAT_RAW_OPAQUE);
++            if (!esRaw) continue;
++            if ((int32_t) nuevas[i + 1] != anchoCompleto) continue;
++            if ((int32_t) nuevas[i + 2] != altoCompleto) continue;
++            if (nuevas[i + 3] <= 33333333) continue;
++            ALOGI("bajarDuracionRawCompleto: camara %s: formato %d a %dx%d pasa de %lld a 33 ms",
++                    idCamara.c_str(), formato, anchoCompleto, altoCompleto,
++                    (long long) nuevas[i + 3]);
++            nuevas[i + 3] = 33333333;
++            tocado = true;
++        }
++        if (tocado) {
++            chars.update(etiqueta, nuevas.data(), nuevas.size());
++        }
++    }
++}
++
++status_t CameraProviderManager::ProviderInfo::DeviceInfo3::addQuadCfaFullSizeJpeg() {
++    bajarDuracionRawCompleto(mCameraCharacteristics, mId);
++
++    // Apagado por defecto: encenderlo aqui se lo ensena a todas las
++    // aplicaciones, incluidas las que no lo soportan. El camino normal es el
++    // de por aplicacion, en CameraService. Esto queda como interruptor para
++    // ensenarselo a todo el mundo:
++    //     setprop persist.sys.camera.qcfa_jpeg 1
++    if (property_get_int32("persist.sys.camera.qcfa_jpeg", 0) == 0) {
++        return OK;
++    }
++    return CameraProviderManager::aplicarJpegCompletoQuadCfa(mCameraCharacteristics, mId);
++}
++
++status_t CameraProviderManager::ProviderInfo::DeviceInfo3::addQuadCfaActiveArrayFull() {
++    // libgcam exige que el RAW maximo coincida con el area activa o el pixel
++    // array. En Quad-Bayer el RAW maximo dobla al area activa binned, asi que
++    // GCam se cierra o captura a resolucion reducida. Aqui se declara la
++    // geometria del sensor a resolucion completa para que la app pida los 50 MP.
++    // Cambia el recorte/zoom que ven todas las apps: apagado por defecto.
++    //     setprop persist.sys.camera.qcfa_active_full 1
++    if (property_get_int32("persist.sys.camera.qcfa_active_full", 0) == 0) {
++        return OK;
++    }
++    auto& c = mCameraCharacteristics;
++    auto pixelMax = c.find(ANDROID_SENSOR_INFO_PIXEL_ARRAY_SIZE_MAXIMUM_RESOLUTION);
++    auto activeMax = c.find(ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE_MAXIMUM_RESOLUTION);
++    if (pixelMax.count != 2 || activeMax.count != 4) {
++        return OK;  // solo la camara que declara tamano de maxima resolucion
++    }
++    // Los punteros de find() apuntan al buffer de metadata y update() puede
++    // realocarlo, dejandolos colgando. Se copian los valores antes de tocar nada.
++    const int32_t pix[2] = { pixelMax.data.i32[0], pixelMax.data.i32[1] };
++    const int32_t act[4] = { activeMax.data.i32[0], activeMax.data.i32[1],
++                             activeMax.data.i32[2], activeMax.data.i32[3] };
++    status_t res = c.update(ANDROID_SENSOR_INFO_PIXEL_ARRAY_SIZE, pix, 2);
++    if (res == OK) {
++        res = c.update(ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE, act, 4);
++    }
++    if (res == OK) {
++        res = c.update(ANDROID_SENSOR_INFO_PRE_CORRECTION_ACTIVE_ARRAY_SIZE, act, 4);
++    }
++    if (res == OK) {
++        ALOGI("%s: area activa a resolucion completa %dx%d en la camara %s",
++                __FUNCTION__, act[2], act[3], mId.c_str());
++    } else {
++        ALOGE("%s: no se pudo declarar el area activa completa: %s (%d)",
++                __FUNCTION__, strerror(-res), res);
++    }
++    return res;
++}
++
++// GCam (libgcam, static_metadata.cc) rechaza una camara si su RAW maximo
++// (frame_raw_max) no coincide con el area activa ni con el pixel array. En este
++// movil la camara fisica auxiliar "1" es Quad-Bayer y, tras el resync, anuncia
++// su geometria de maxima resolucion (p.ej. 6528x4896) mientras su area activa
++// base sigue binned (3264x2448). GCam enumera TODAS las camaras al arrancar,
++// falla en la "1" ("Create: StaticMetadata for sensor ID 1 failed basic error
++// checks" -> HalideRuntime.checkGcamHalideRuntime Failed) y se cierra con
++// Gcam.f() NPE, aunque capture con la principal "0".
++//
++// Aqui se iguala el area activa/pixel array de las camaras AUXILIARES (id != 0)
++// a su tamano de maxima resolucion, para que pasen la comprobacion de GCam. NO
++// se toca la principal "0": crecerla haria que GCam pidiera RAW a resolucion
++// completa y el preview saldria negro (limite del HAL, ver addQuadCfaActiveArrayFull).
++// Como las auxiliares no son la lente de captura de GCam, crecer su geometria
++// anunciada es inocuo. Reversible:
++//     setprop persist.sys.camera.gcam_aux_fix 0
++status_t CameraProviderManager::ProviderInfo::DeviceInfo3::fixGcamAuxRawMismatch() {
++    // GCam (libgcam) calcula frame_raw_max con la salida RAW mas grande del mapa
++    // BASE de configuraciones (ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS) y
++    // exige frame_raw_max == area activa / pixel array. La camara principal (id 0)
++    // esconde su RAW full-res en el mapa de MAXIMA RESOLUCION (GCam lo ignora) y
++    // pasa; las auxiliares Quad-Bayer (p.ej. la frontal de 32MP) cuelan su RAW
++    // full-res (6528x4896) en el mapa BASE mientras su area activa es binned
++    // (3264x2448) -> GCam las rechaza ("StaticMetadata for sensor ID N failed")
++    // y crashea al enumerar.
++    //
++    // El enfoque correcto NO es agrandar el area activa (eso hace que GCam pida
++    // RAW full-res y el preview salga negro, porque el HAL solo entrega binned),
++    // sino CAPAR las salidas RAW del mapa base al area activa: asi frame_raw_max
++    // == area activa (GCam acepta) Y GCam pide RAW binned, que el HAL SI entrega.
++    // Solo auxiliares (id != 0); la principal no se toca. Reversible:
++    //     setprop persist.sys.camera.gcam_aux_fix 0
++    if (mId == "0") {
++        return OK;  // nunca la principal
++    }
++    if (property_get_int32("persist.sys.camera.gcam_aux_fix", 1) == 0) {
++        return OK;
++    }
++    auto& c = mCameraCharacteristics;
++
++    auto active = c.find(ANDROID_SENSOR_INFO_ACTIVE_ARRAY_SIZE);
++    if (active.count != 4) {
++        return OK;
++    }
++    const int32_t actW = active.data.i32[2];
++    const int32_t actH = active.data.i32[3];
++    if (actW <= 0 || actH <= 0) {
++        return OK;
++    }
++
++    auto isRaw = [](int32_t f) {
++        return f == HAL_PIXEL_FORMAT_RAW10 || f == HAL_PIXEL_FORMAT_RAW12
++            || f == HAL_PIXEL_FORMAT_RAW16 || f == HAL_PIXEL_FORMAT_RAW_OPAQUE;
++    };
++
++    auto configs = c.find(ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS);
++    if (configs.count < 4) {
++        return OK;
++    }
++
++    std::vector<int32_t> keep;
++    keep.reserve(configs.count);
++    int rawDropped = 0;
++    int rawKeptAtActive = 0;
++    for (size_t i = 0; i + 3 < configs.count; i += 4) {
++        const int32_t fmt = configs.data.i32[i];
++        const int32_t w   = configs.data.i32[i + 1];
++        const int32_t h   = configs.data.i32[i + 2];
++        const int32_t dir = configs.data.i32[i + 3];
++        if (isRaw(fmt) && dir == ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT
++                && (w > actW || h > actH)) {
++            rawDropped++;
++            continue;  // se descarta la salida RAW full-res
++        }
++        if (isRaw(fmt) && w == actW && h == actH
++                && dir == ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT) {
++            rawKeptAtActive++;
++        }
++        keep.push_back(fmt); keep.push_back(w); keep.push_back(h); keep.push_back(dir);
++    }
++
++    if (rawDropped == 0) {
++        return OK;  // no habia RAW full-res que capar
++    }
++
++    // Si al capar no queda ningun RAW al tamano activo, se añade uno (RAW10) para
++    // que GCam tenga un stream RAW valido al frame size.
++    if (rawKeptAtActive == 0) {
++        keep.push_back(HAL_PIXEL_FORMAT_RAW10);
++        keep.push_back(actW); keep.push_back(actH);
++        keep.push_back(ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT);
++    }
++
++    status_t res = c.update(ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS,
++                            keep.data(), keep.size());
++    if (res != OK) {
++        ALOGE("%s: camara %s: no se pudo capar el RAW: %s (%d)",
++                __FUNCTION__, mId.c_str(), strerror(-res), res);
++        return res;
++    }
++
++    // Limpiar las duraciones RAW full-res correspondientes.
++    const uint32_t durTags[] = {
++        ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS,
++        ANDROID_SCALER_AVAILABLE_STALL_DURATIONS,
++    };
++    for (uint32_t tag : durTags) {
++        auto d = c.find(tag);
++        if (d.count < 4) continue;
++        std::vector<int64_t> keepD;
++        keepD.reserve(d.count);
++        bool tocado = false;
++        for (size_t i = 0; i + 3 < d.count; i += 4) {
++            const int64_t fmt = d.data.i64[i];
++            const int64_t w   = d.data.i64[i + 1];
++            const int64_t h   = d.data.i64[i + 2];
++            if (isRaw((int32_t) fmt) && (w > actW || h > actH)) { tocado = true; continue; }
++            keepD.push_back(d.data.i64[i]);     keepD.push_back(d.data.i64[i + 1]);
++            keepD.push_back(d.data.i64[i + 2]); keepD.push_back(d.data.i64[i + 3]);
++        }
++        if (tocado) c.update(tag, keepD.data(), keepD.size());
++    }
++
++    ALOGI("%s: camara auxiliar %s: capadas %d salidas RAW full-res al area activa %dx%d para GCam",
++            __FUNCTION__, mId.c_str(), rawDropped, actW, actH);
++    return OK;
++}
++
+ status_t CameraProviderManager::ProviderInfo::DeviceInfo3::addRotateCropTags() {
+     status_t res = OK;
+     auto& c = mCameraCharacteristics;
+diff --git a/services/camera/libcameraservice/common/CameraProviderManager.h b/services/camera/libcameraservice/common/CameraProviderManager.h
+index 2c463411a4..ecdffd2b77 100644
+--- a/services/camera/libcameraservice/common/CameraProviderManager.h
++++ b/services/camera/libcameraservice/common/CameraProviderManager.h
+@@ -313,6 +313,12 @@ public:
+      * Return API2 camera characteristics - returns NAME_NOT_FOUND if a device ID does
+      * not have a v3 or newer HAL version.
+      */
++    // Anade el tamano completo del sensor (Quad-Bayer) como JPEG a unas
++    // caracteristicas ya obtenidas. Se aplica por aplicacion, no de forma
++    // global: hay camaras que se quedan en negro si ven ese tamano.
++    static status_t aplicarJpegCompletoQuadCfa(CameraMetadata& chars,
++            const std::string& idCamara);
++
+     status_t getCameraCharacteristics(const std::string &id,
+             bool overrideForPerfClass, CameraMetadata* characteristics,
+             const CameraCompatibilityInfo& compatInfo) const;
+@@ -802,6 +808,11 @@ private:
+ 
+             status_t addAvailableKeyIfMissing(CameraMetadata& ch,
+                     int32_t availableTag, int32_t keyToAdd);
++            // Publica el tamano completo del sensor como tamano de foto:
++            // el HAL no lo anuncia aunque lo acepta.
++            status_t addQuadCfaFullSizeJpeg();
++            status_t addQuadCfaActiveArrayFull();
++            status_t fixGcamAuxRawMismatch();
+             status_t addRotateCropTags();
+             status_t addAutoframingTags();
+             status_t addPreCorrectionActiveArraySize();
+diff --git a/services/camera/libcameraservice/common/aidl/AidlProviderInfo.cpp b/services/camera/libcameraservice/common/aidl/AidlProviderInfo.cpp
+index 4c19ccf20e..989cea5d4e 100644
+--- a/services/camera/libcameraservice/common/aidl/AidlProviderInfo.cpp
++++ b/services/camera/libcameraservice/common/aidl/AidlProviderInfo.cpp
+@@ -641,6 +641,16 @@ AidlProviderInfo::AidlDeviceInfo3::AidlDeviceInfo3(
+         }
+     }
+ 
++    res = addQuadCfaFullSizeJpeg();
++    if (OK != res) {
++        ALOGE("%s: No se pudo anunciar el tamano completo del sensor como foto: %s (%d)",
++                __FUNCTION__, strerror(-res), res);
++    }
++    res = fixGcamAuxRawMismatch();
++    if (OK != res) {
++        ALOGE("%s: No se pudo igualar el area activa de la camara auxiliar para GCam: %s (%d)",
++                __FUNCTION__, strerror(-res), res);
++    }
+     res = addRotateCropTags();
+     if (OK != res) {
+         ALOGE("%s: Unable to add default SCALER_ROTATE_AND_CROP tags: %s (%d)", __FUNCTION__,
+diff --git a/services/camera/libcameraservice/common/hidl/HidlProviderInfo.cpp b/services/camera/libcameraservice/common/hidl/HidlProviderInfo.cpp
+index 790c580154..edc23d9d66 100644
+--- a/services/camera/libcameraservice/common/hidl/HidlProviderInfo.cpp
++++ b/services/camera/libcameraservice/common/hidl/HidlProviderInfo.cpp
+@@ -654,6 +654,21 @@ HidlProviderInfo::HidlDeviceInfo3::HidlDeviceInfo3(
+         }
+     }
+ 
++    res = addQuadCfaFullSizeJpeg();
++    if (OK != res) {
++        ALOGE("%s: No se pudo anunciar el tamano completo del sensor como foto: %s (%d)",
++                __FUNCTION__, strerror(-res), res);
++    }
++    res = fixGcamAuxRawMismatch();
++    if (OK != res) {
++        ALOGE("%s: No se pudo igualar el area activa de la camara auxiliar para GCam: %s (%d)",
++                __FUNCTION__, strerror(-res), res);
++    }
++    res = addQuadCfaActiveArrayFull();
++    if (OK != res) {
++        ALOGE("%s: No se pudo declarar el area activa completa: %s (%d)",
++                __FUNCTION__, strerror(-res), res);
++    }
+     res = addRotateCropTags();
+     if (OK != res) {
+         ALOGE("%s: Unable to add default SCALER_ROTATE_AND_CROP tags: %s (%d)", __FUNCTION__,
+diff --git a/services/camera/libcameraservice/device3/Camera3Device.cpp b/services/camera/libcameraservice/device3/Camera3Device.cpp
+index c6839e09e5..3b680ccb69 100644
+--- a/services/camera/libcameraservice/device3/Camera3Device.cpp
++++ b/services/camera/libcameraservice/device3/Camera3Device.cpp
+@@ -828,6 +828,8 @@ status_t Camera3Device::convertMetadataListToRequestListLocked(
+         }
+         newRequest->mResultExtras.requestId = requestIdEntry.data.i32[0];
+ 
++        tagFullSizeQuadCfaRequestLocked(newRequest);
++
+         requestList->push_back(newRequest);
+ 
+         ALOGV("%s: requestId = %" PRId32, __FUNCTION__, newRequest->mResultExtras.requestId);
+@@ -851,6 +853,119 @@ status_t Camera3Device::convertMetadataListToRequestListLocked(
+     return OK;
+ }
+ 
++void Camera3Device::tagFullSizeQuadCfaRequestLocked(sp<CaptureRequest> &request) {
++    if (mFullSizeQuadCfaWidth <= 0 || request == nullptr) {
++        return;
++    }
++    bool esFotoCompleta = false;
++    for (size_t i = 0; i < request->mOutputStreams.size(); i++) {
++        const sp<Camera3OutputStreamInterface> &stream = request->mOutputStreams[i];
++        if (stream != nullptr
++                && (int32_t) stream->getWidth() == mFullSizeQuadCfaWidth
++                && (int32_t) stream->getHeight() == mFullSizeQuadCfaHeight) {
++            esFotoCompleta = true;
++            break;
++        }
++    }
++    // El HAL solo pone xiaomi.remosaic.detected a 1 si se le pide el remosaico
++    // mientras previsualiza. Marcando unicamente las peticiones que apuntan al
++    // flujo grande, nunca llega a evaluarlo y siempre contesta 0, que es lo que
++    // lee la camara de Xiaomi para decidir que no lo pide.
++    //
++    // Con esto se marcan todas las peticiones de una sesion que tenga un flujo
++    // del tamano completo, tambien las de vista previa:
++    //
++    //     setprop persist.sys.camera.qcfa_remosaic_always 1
++    const bool siempre =
++            property_get_int32("persist.sys.camera.qcfa_remosaic_always", 0) != 0;
++    if ((!esFotoCompleta && !siempre) || request->mSettingsList.empty()) {
++        return;
++    }
++
++    CameraMetadata &ajustes = request->mSettingsList.begin()->metadata;
++    sp<VendorTagDescriptor> vTags;
++    sp<VendorTagDescriptorCache> vCache = VendorTagDescriptorCache::getGlobalVendorTagCache();
++    if (vCache.get() != nullptr) {
++        const camera_metadata_t *buffer = ajustes.getAndLock();
++        metadata_vendor_id_t vendorId = get_camera_metadata_vendor_id(buffer);
++        ajustes.unlock(buffer);
++        vCache->getVendorTagDescriptor(vendorId, &vTags);
++    }
++    uint32_t tag = 0;
++    bool encontrada = (vTags.get() != nullptr)
++            && CameraMetadata::getTagFromName("xiaomi.remosaic.enabled",
++                    vTags.get(), &tag) == OK;
++
++    if (!encontrada && vCache.get() != nullptr) {
++        // El identificador de fabricante que trae la peticion no siempre
++        // acierta en la cache, y el descriptor global viene vacio dentro de
++        // cameraserver. Se recorren todos los descriptores hasta dar con ella.
++        for (const auto &par : vCache->getVendorIdsAndTagDescriptors()) {
++            if (par.second.get() == nullptr) continue;
++            if (CameraMetadata::getTagFromName("xiaomi.remosaic.enabled",
++                    par.second.get(), &tag) == OK) {
++                encontrada = true;
++                break;
++            }
++        }
++    }
++
++    if (!encontrada) {
++        // Dentro de cameraserver los descriptores de la cache vienen vacios y
++        // la busqueda por nombre no llega a ninguna parte. El identificador si
++        // se conoce: sale en dumpsys media.camera como
++        //     0x810e0000 (enabled) en la seccion xiaomi.remosaic
++        // Se deja en una propiedad por si cambia con otra version del HAL.
++        tag = (uint32_t) property_get_int32("persist.sys.camera.qcfa_remosaic_tag",
++                0x810e0000);
++        if (tag == 0) {
++            ALOGW("%s: el HAL no tiene xiaomi.remosaic.enabled", __FUNCTION__);
++            return;
++        }
++        ALOGI("%s: xiaomi.remosaic.enabled no aparece por nombre; se usa 0x%x",
++                __FUNCTION__, tag);
++    }
++    ALOGI("%s: xiaomi.remosaic.enabled encontrada (0x%x), se activa para la foto de %dx%d",
++            __FUNCTION__, tag, mFullSizeQuadCfaWidth, mFullSizeQuadCfaHeight);
++    const uint8_t encendido = 1;
++    status_t res = ajustes.update(tag, &encendido, 1);
++    if (res != OK) {
++        ALOGW("%s: no se pudo poner xiaomi.remosaic.enabled: %d", __FUNCTION__, res);
++    }
++
++    // Mandos para el revelado, apagados por defecto (-1 = no tocar nada y dejar
++    // que decidan la aplicacion y el HAL).
++    //
++    // La foto de 50 MP sale con efecto acuarela: el detalle fino esta ahi (se
++    // lee texto pequeno), pero las superficies quedan planchadas. Es la
++    // reduccion de ruido del HAL, que en el modo de remosaico se aplica sin que
++    // la aplicacion diga nada. Estos dos permiten probar otra cosa sin
++    // recompilar:
++    //
++    //     setprop persist.sys.camera.qcfa_nr 0     ruido: 0 apagado, 1 rapido,
++    //                                              2 alta calidad, 3 minimo
++    //     setprop persist.sys.camera.qcfa_edge 2   bordes: 0 apagado, 1 rapido,
++    //                                              2 alta calidad
++    //
++    // Contra el suavizado, lo que suele funcionar es bajar el primero (0 o 3).
++    // Aviso: puede que el HAL los ignore; se veria porque la foto no cambia.
++    const int32_t modoRuido = property_get_int32("persist.sys.camera.qcfa_nr", -1);
++    if (modoRuido >= 0) {
++        const uint8_t valor = (uint8_t) modoRuido;
++        if (ajustes.update(ANDROID_NOISE_REDUCTION_MODE, &valor, 1) != OK) {
++            ALOGW("%s: no se pudo poner el modo de reduccion de ruido", __FUNCTION__);
++        }
++    }
++
++    const int32_t modoBordes = property_get_int32("persist.sys.camera.qcfa_edge", -1);
++    if (modoBordes >= 0) {
++        const uint8_t valor = (uint8_t) modoBordes;
++        if (ajustes.update(ANDROID_EDGE_MODE, &valor, 1) != OK) {
++            ALOGW("%s: no se pudo poner el modo de bordes", __FUNCTION__);
++        }
++    }
++}
++
+ status_t Camera3Device::capture(CameraMetadata &request, int64_t* lastFrameNumber) {
+     ATRACE_CALL();
+ 
+@@ -2609,6 +2724,108 @@ status_t Camera3Device::configureStreamsLocked(int operatingMode,
+     }
+ #endif
+ 
++    // Fotos al tamano completo del sensor: el HAL solo las hace dentro de su
++    // modo de sesion propietario. Si se le pide una salida JPEG de ese tamano
++    // en una sesion normal, se muere. Como la app no puede saberlo, el cambio
++    // de modo se hace aqui.
++    mFullSizeQuadCfaWidth = 0;
++    mFullSizeQuadCfaHeight = 0;
++    {
++        const int32_t modoQuadCfa =
++                property_get_int32("persist.sys.camera.qcfa_mode", 0x80F3);
++
++        // Si la aplicacion ha configurado algo que no sea JPEG al tamano
++        // completo, conoce los modos del fabricante y no hay que tocarle nada.
++        // La camara de Xiaomi, en su modo de 50 MP, pide ademas un YUV de
++        // 8192x6144; el modo 0x80F3 a ese tamano solo acepta JPEG, asi que
++        // forzarlo dejaba ese flujo sin datos y la foto salia entera verde.
++        // Se puede desactivar esta cautela para probar si el modo propietario
++        // arregla el remosaico de la camara de Xiaomi:
++        //     setprop persist.sys.camera.qcfa_forzar_modo 1
++        bool laAppSabeLoQuePide =
++                property_get_int32("persist.sys.camera.qcfa_forzar_modo", 0) == 0
++                ? false : false;
++        const bool forzarModo =
++                property_get_int32("persist.sys.camera.qcfa_forzar_modo", 0) != 0;
++        for (size_t i = 0; i < mOutputStreams.size(); i++) {
++            sp<Camera3OutputStreamInterface> stream = mOutputStreams[i];
++            if (stream == nullptr) continue;
++            // Solo cuenta el YUV. El RAW a tamano completo no vale como senal:
++            // Aperture lo pide para guardar el DNG y si, necesita el cambio de
++            // modo. Mirando cualquier formato se quedaba en 2592x1944.
++            const int formato = stream->getFormat();
++            if (formato != HAL_PIXEL_FORMAT_YCbCr_420_888
++                    && formato != HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED) {
++                continue;
++            }
++            if ((int64_t) stream->getWidth() * stream->getHeight()
++                    > (int64_t) 4208 * 3120) {
++                ALOGI("%s: hay un flujo YUV de %dx%d: la aplicacion "
++                        "conoce el modo de resolucion completa, no se le toca",
++                        __FUNCTION__, stream->getWidth(), stream->getHeight());
++                laAppSabeLoQuePide = !forzarModo;
++                break;
++            }
++        }
++
++        // Nota: el tamano completo se apunta siempre que exista un flujo asi,
++        // aunque no se cambie el modo. La etiqueta del remosaico hace falta
++        // igual, y a la camara de Xiaomi es lo unico que se le toca.
++        for (size_t i = 0; modoQuadCfa != 0 && i < mOutputStreams.size(); i++) {
++            sp<Camera3OutputStreamInterface> stream = mOutputStreams[i];
++            if (stream == nullptr) continue;
++            if (stream->getFormat() != HAL_PIXEL_FORMAT_BLOB) continue;
++            // Cualquier JPEG mas grande que la mayor foto que el HAL anuncia
++            // por si mismo tiene que ir por el camino de resolucion completa.
++            if ((int64_t) stream->getWidth() * stream->getHeight()
++                    <= (int64_t) 4208 * 3120) {
++                continue;
++            }
++            mFullSizeQuadCfaWidth = stream->getWidth();
++            mFullSizeQuadCfaHeight = stream->getHeight();
++            if (!laAppSabeLoQuePide && operatingMode != modoQuadCfa) {
++                ALOGI("%s: foto de %dx%d: se pasa del modo de sesion %d al %d",
++                        __FUNCTION__, mFullSizeQuadCfaWidth, mFullSizeQuadCfaHeight,
++                        operatingMode, modoQuadCfa);
++                operatingMode = modoQuadCfa;
++            }
++            break;
++        }
++
++        // PRUEBA (qcfa_gcam_full=1): GCam pide RAW10/YUV a tamano completo, no
++        // BLOB, asi que el bucle de arriba no le cambia el modo y sus frames
++        // salen negros. Aqui, si esta el flag, se dispara el modo QCFA y se
++        // apunta la salida full-res tambien para RAW/YUV, para probar si el HAL
++        // entrega datos validos a un stream que no es JPEG.
++        if (property_get_int32("persist.sys.camera.qcfa_gcam_full", 0) != 0
++                && modoQuadCfa != 0 && mFullSizeQuadCfaWidth <= 0) {
++            for (size_t i = 0; i < mOutputStreams.size(); i++) {
++                sp<Camera3OutputStreamInterface> stream = mOutputStreams[i];
++                if (stream == nullptr) continue;
++                const int f = stream->getFormat();
++                const bool esRawOYuv =
++                        f == HAL_PIXEL_FORMAT_RAW10
++                        || f == HAL_PIXEL_FORMAT_RAW16
++                        || f == HAL_PIXEL_FORMAT_RAW_OPAQUE
++                        || f == HAL_PIXEL_FORMAT_YCbCr_420_888
++                        || f == HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED;
++                if (!esRawOYuv) continue;
++                if ((int64_t) stream->getWidth() * stream->getHeight()
++                        <= (int64_t) 4208 * 3120) {
++                    continue;
++                }
++                mFullSizeQuadCfaWidth = stream->getWidth();
++                mFullSizeQuadCfaHeight = stream->getHeight();
++                ALOGI("%s: [gcam_full] flujo RAW/YUV fmt %d de %dx%d: se pasa del "
++                        "modo %d al %d y se etiquetara remosaico",
++                        __FUNCTION__, f, mFullSizeQuadCfaWidth, mFullSizeQuadCfaHeight,
++                        operatingMode, modoQuadCfa);
++                operatingMode = modoQuadCfa;
++                break;
++            }
++        }
++    }
++
+     bool isConstrainedHighSpeed =
+             CAMERA_STREAM_CONFIGURATION_CONSTRAINED_HIGH_SPEED_MODE == operatingMode;
+ 
+diff --git a/services/camera/libcameraservice/device3/Camera3Device.h b/services/camera/libcameraservice/device3/Camera3Device.h
+index dcc1280d93..0c4b8a2565 100644
+--- a/services/camera/libcameraservice/device3/Camera3Device.h
++++ b/services/camera/libcameraservice/device3/Camera3Device.h
+@@ -776,6 +776,17 @@ class Camera3Device :
+ 
+     status_t checkStatusOkToCaptureLocked();
+ 
++    /**
++     * Si la sesion se configuro para fotos al tamano completo del sensor, pone
++     * en la peticion la etiqueta que hace que el HAL entregue los 50 MP. Sin
++     * ella devuelve la imagen recortada aunque el tamano sea el grande.
++     */
++    void tagFullSizeQuadCfaRequestLocked(sp<CaptureRequest> &request);
++
++    /** Medidas de la salida de foto a tamano completo, si hay alguna. */
++    int32_t mFullSizeQuadCfaWidth = 0;
++    int32_t mFullSizeQuadCfaHeight = 0;
++
+     status_t convertMetadataListToRequestListLocked(
+             const List<const PhysicalCameraSettingsList> &metadataList,
+             const std::list<SurfaceMap> &surfaceMaps,
+diff --git a/services/camera/libcameraservice/device3/Camera3OutputStream.cpp b/services/camera/libcameraservice/device3/Camera3OutputStream.cpp
+index 04ab216bc0..33854caec0 100644
+--- a/services/camera/libcameraservice/device3/Camera3OutputStream.cpp
++++ b/services/camera/libcameraservice/device3/Camera3OutputStream.cpp
+@@ -770,6 +770,22 @@ status_t Camera3OutputStream::configureConsumerQueueLocked(bool allowPreviewResp
+         return INVALID_OPERATION;
+     }
+ 
++    // Fotos al tamano completo del sensor: como mucho dos imagenes en vuelo.
++    // Cada una ocupa unos 80 MB de memoria contigua y las apps hechas con
++    // CameraX reservan cuatro, que es justo donde el asignador empieza a no
++    // encontrar sitio y el HAL se cae al mapear el bufer. Ver arriba.
++    if ((int64_t) camera_stream::width * camera_stream::height > (int64_t) 4208 * 3120) {
++        ALOGI("%s: foto de %dx%d: el consumidor pide %d y el HAL %d; se limitan a 2",
++                __FUNCTION__, camera_stream::width, camera_stream::height,
++                maxConsumerBuffers, camera_stream::max_buffers);
++        if (camera_stream::max_buffers > 1) {
++            camera_stream::max_buffers = 1;
++        }
++        if (maxConsumerBuffers > 2) {
++            maxConsumerBuffers = 2;
++        }
++    }
++
+     mTotalBufferCount = maxConsumerBuffers + camera_stream::max_buffers;
+ 
+     int timestampBase = getTimestampBase();
+diff --git a/services/camera/libcameraservice/device3/Camera3OutputUtils.cpp b/services/camera/libcameraservice/device3/Camera3OutputUtils.cpp
+index b2f607becb..5f69e04eee 100644
+--- a/services/camera/libcameraservice/device3/Camera3OutputUtils.cpp
++++ b/services/camera/libcameraservice/device3/Camera3OutputUtils.cpp
+@@ -33,6 +33,7 @@
+ 
+ #include <inttypes.h>
+ 
++#include <cutils/properties.h>
+ #include <utils/Log.h>
+ #include <utils/SortedVector.h>
+ #include <utils/Trace.h>
+@@ -332,6 +333,64 @@ void sendPartialCaptureResult(CaptureOutputStates& states,
+     }
+ }
+ 
++// Le dice a la aplicacion que el remosaico esta disponible.
++//
++// La camara de Xiaomi mira xiaomi.remosaic.detected en el resultado antes de
++// pedir el remosaico. El HAL la manda a 0, asi que no lo pide nunca, el flujo de
++// 8192x6144 se queda sin datos y la foto de 50 MP sale entera verde. El HAL sabe
++// hacer el remosaico —Aperture saca sus 50 MP reales— pero no lo anuncia en la
++// sesion de esa aplicacion.
++//
++// Hay que escribirlo aqui, segun entra el resultado del HAL: mas adelante los
++// metadatos ya estan bloqueados y update() devuelve INVALID_OPERATION.
++//
++// Apagado por defecto, porque mientras este puesto toca los resultados de todas
++// las camaras:
++//
++//     setprop persist.sys.camera.qcfa_remosaic_detected 1
++// Contador para saber por que rama llega el resultado del HAL.
++//
++// Se enciende con: setprop persist.sys.camera.qcfa_mapa 1
++static void mapaRama(const char *donde, int a, int b, int c) {
++    if (property_get_int32("persist.sys.camera.qcfa_mapa", 0) == 0) {
++        return;
++    }
++    static int lineas = 0;
++    if (lineas >= 40) return;
++    lineas++;
++    ALOGI("qcfamapa: %s | %d %d %d", donde, a, b, c);
++}
++
++static void decirQueElRemosaicoEstaListo(CameraMetadata &resultado) {
++    if (property_get_int32("persist.sys.camera.qcfa_remosaic_detected", 0) == 0) {
++        return;
++    }
++    const uint32_t etiqueta = (uint32_t) property_get_int32(
++            "persist.sys.camera.qcfa_detected_tag", 0x810e0001);
++
++    // Nada de update(): con etiquetas de fabricante no consigue resolver el
++    // tipo y devuelve -38 ("Unknown tag"). La entrada ya viene en el resultado
++    // —el HAL la manda a 0— asi que se cambia la que hay, que ya trae su tipo.
++    camera_metadata_t *bruto = resultado.release();
++    if (bruto == nullptr) {
++        return;
++    }
++    camera_metadata_entry_t entrada;
++    status_t res = find_camera_metadata_entry(bruto, etiqueta, &entrada);
++    if (res == OK && entrada.count >= 1) {
++        const uint8_t si = 1;
++        res = update_camera_metadata_entry(bruto, entrada.index, &si, 1, nullptr);
++    }
++    resultado.acquire(bruto);
++
++    static int contados = 0;
++    if (contados < 40) {
++        contados++;
++        ALOGI("qcfa: xiaomi.remosaic.detected (0x%x) en su sitio -> %d",
++                etiqueta, res);
++    }
++}
++
+ void sendCaptureResult(
+         CaptureOutputStates& states,
+         CameraMetadata &pendingMetadata,
+@@ -342,6 +401,11 @@ void sendCaptureResult(
+         const std::set<std::string>& cameraIdsWithZoom, bool useZoomRatio,
+         const std::vector<PhysicalCaptureResultInfo>& physicalMetadatas) {
+     ATRACE_CALL();
++    mapaRama("sendCaptureResult", (int) frameNumber,
++            pendingMetadata.isEmpty() ? 1 : 0, (int) physicalMetadatas.size());
++    // Aqui es donde la etiqueta si esta presente: en las ramas anteriores los
++    // metadatos son parciales y find_camera_metadata_entry devuelve -2.
++    decirQueElRemosaicoEstaListo(pendingMetadata);
+     if (pendingMetadata.isEmpty())
+         return;
+ 
+@@ -724,6 +788,8 @@ void processCaptureResult(CaptureOutputStates& states, const camera_capture_resu
+     status_t res;
+ 
+     uint32_t frameNumber = result->frame_number;
++    mapaRama("entra", (int) frameNumber, (int) result->partial_result,
++            (int) result->num_physcam_metadata);
+     if (result->result == NULL && result->num_output_buffers == 0 &&
+             result->input_buffer == NULL) {
+         SET_ERR(CAMERA_HAL_CALLBACK_ERROR,
+@@ -900,9 +966,11 @@ void processCaptureResult(CaptureOutputStates& states, const camera_capture_resu
+             }
+             if (states.usePartialResult &&
+                     !request.collectedPartialResult.isEmpty()) {
++                mapaRama("recoge parciales", (int) frameNumber, 0, 0);
+                 collectedPartialResult.acquire(
+                     request.collectedPartialResult);
+             }
++            mapaRama("resultado total", (int) frameNumber, 0, 0);
+             request.haveResultMetadata = true;
+             request.errorBufStrategy = ERROR_BUF_RETURN_NOTIFY;
+         }
+@@ -948,15 +1016,22 @@ void processCaptureResult(CaptureOutputStates& states, const camera_capture_resu
+             for (uint32_t i = 0; i < result->num_physcam_metadata; i++) {
+                 CameraMetadata physicalMetadata;
+                 physicalMetadata.append(result->physcam_metadata[i]);
++                // La camara de Xiaomi puede estar leyendolo de aqui y no del
++                // resultado logico, asi que se pone en los dos sitios.
++                decirQueElRemosaicoEstaListo(physicalMetadata);
+                 request.physicalMetadatas.push_back({result->physcam_ids[i],
+                         physicalMetadata});
+             }
+             if (shutterTimestamp == 0) {
++                mapaRama("rama pendiente (sin obturador)", (int) frameNumber, 0, 0);
+                 request.pendingMetadata = result->result;
++                decirQueElRemosaicoEstaListo(request.pendingMetadata);
+                 request.collectedPartialResult = collectedPartialResult;
+             } else if (request.hasCallback) {
++                mapaRama("rama directa (con obturador)", (int) frameNumber, 0, 0);
+                 CameraMetadata metadata;
+                 metadata = result->result;
++                decirQueElRemosaicoEstaListo(metadata);
+                 auto cameraIdsWithZoom = getCameraIdsWithZoomLocked(
+                         states.inflightMap, metadata, request.cameraIdsWithZoom);
+                 sendCaptureResult(states, metadata, request.resultExtras,
+-- 
+2.43.0
+

@@ -1,0 +1,35 @@
+From 6e904e27368754e5433b6db7a8ed89bb03536a7a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:31 +0200
+Subject: [PATCH] base_system: cupid adjustments
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     target/product/base_system.mk | 6 +++++-
+     1 file changed, 5 insertions(+), 1 deletion(-)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ target/product/base_system.mk | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/target/product/base_system.mk b/target/product/base_system.mk
+index 88aed43f03..d9cc0541ce 100644
+--- a/target/product/base_system.mk
++++ b/target/product/base_system.mk
+@@ -609,7 +609,11 @@ PRODUCT_PACKAGES_DEBUG := \
+     unwind_reg_info \
+     unwind_symbols \
+ 
+-ifeq ($(LINEAGE_BUILD),)
++# TARGET_NO_AOSP_SU lo define el dispositivo cuando el root lo da otra cosa
++# (por ejemplo KernelSU, que trae su propio binario y lo monta al arrancar).
++# Instalar ademas el su de AOSP solo suma un delator para las apps que buscan
++# root, sin aportar nada.
++ifeq ($(LINEAGE_BUILD)$(TARGET_NO_AOSP_SU),)
+ PRODUCT_PACKAGES_DEBUG += \
+     su
+ endif
+-- 
+2.43.0
+

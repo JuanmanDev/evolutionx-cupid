@@ -1,0 +1,38 @@
+From ce5c861764e24a565dff32f26b3ace0d8b91371e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Juan=20Manuel=20B=C3=A9c?= <Juanmabs22@hotmail.com>
+Date: Mon, 14 Sep 2026 18:04:31 +0200
+Subject: [PATCH] soong: ui/build tweak for cupid tree
+
+Local production changes for Xiaomi 12 (cupid), snapshot 2026-09-14.
+
+     ui/build/soong.go | 9 +++++++++
+     1 file changed, 9 insertions(+)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ ui/build/soong.go | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/ui/build/soong.go b/ui/build/soong.go
+index 4521b4abe..4b6393eca 100644
+--- a/ui/build/soong.go
++++ b/ui/build/soong.go
+@@ -215,6 +215,15 @@ func (pb PrimaryBuilderFactory) primaryBuilderInvocation(config Config) bootstra
+ 
+ 	commonArgs = append(commonArgs, "-l", filepath.Join(pb.config.FileListDir(), "Android.bp.list"))
+ 	invocationEnv := make(map[string]string)
++	// Limite de memoria para el recolector de Go de soong_build. Sin esto el heap
++	// crece hasta ~2x el conjunto vivo y en maquinas con poca RAM provoca swap.
++	// soong_build se lanza con env -i, asi que la unica via es invocationEnv.
++	if v := os.Getenv("SOONG_GOMEMLIMIT"); v != "" {
++		invocationEnv["GOMEMLIMIT"] = v
++	}
++	if v := os.Getenv("SOONG_GOGC"); v != "" {
++		invocationEnv["GOGC"] = v
++	}
+ 	if pb.debugPort != "" {
+ 		//debug mode
+ 		commonArgs = append(commonArgs, "--delve_listen", pb.debugPort,
+-- 
+2.43.0
+
