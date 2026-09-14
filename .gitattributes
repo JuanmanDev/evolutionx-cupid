@@ -1,0 +1,4 @@
+patches/** -text
+*.sh text eol=lf
+*.patch -text
+MAP.txt text eol=lf
