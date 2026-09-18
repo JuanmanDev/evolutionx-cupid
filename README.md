@@ -63,3 +63,57 @@ adb shell 'su -c "logcat -d -b all | grep avc | grep -E \"misys|sensors\""'  # d
 ```
 
 Llamada de prueba: acercar/alejar el telefono de la cara debe apagar/encender la pantalla.
+
+## Continuidad entre builds
+
+Lo que hace que el siguiente build sea reproducible **no** es guardar `out/`.
+`out/` ocupa 150-400 GB, lleva rutas absolutas de `/home/android/evolution-x`
+dentro de los `.ninja` y del cache de `soong_build`, y restaurado en otra ruta
+se reconstruye entero igual. Ademas ningun producto de GitHub lo admite: 5 GB
+por repo, 100 MB por fichero en git, 2 GB por fichero en LFS, y el cache de
+Actions son 10 GB por repo que ademas caducan a los 7 dias.
+
+Lo que si se versiona aqui es la receta, que ocupa unos pocos MB:
+
+| Que | Donde | Para que |
+|---|---|---|
+| Manifest fijado | `snapshots/manifest-cupid-<fecha>.xml` | clava los ~800 proyectos a su SHA exacto |
+| Parches propios | `patches/` (27) | los cambios que la ROM lleva encima de Evolution X |
+| ROM compilada | GitHub Release, no git | asset de hasta 2 GB, con su sha256 |
+
+```bash
+# tomar snapshot del arbol actual (en WSL)
+./scripts/snapshot-manifest.sh
+
+# recrear ese arbol exacto en cualquier maquina
+./scripts/restore-tree.sh snapshots/manifest-cupid-20260917.xml
+cd patches && ./apply-patches.sh /home/android/evolution-x
+
+# publicar la ROM ya compilada
+./scripts/publish-release.sh /home/android/evolution-x/out/target/product/cupid/evolution-*.zip
+```
+
+### Velocidad del siguiente build
+
+La que acorta el build es **ccache**, no GitHub. Sobrevive al borrado de `out/`
+y baja un build limpio de ~6 h a ~45 min. Son decenas de GB de ficheros
+diminutos con rutas absolutas: se queda siempre en disco local.
+
+```bash
+export USE_CCACHE=1
+export CCACHE_DIR=/home/android/.ccache
+ccache -M 50G
+ccache -s            # ver tasa de acierto
+```
+
+### Disco (1 NVMe de 1908 GB, particiones C: 1011 + E: 894)
+
+C: y E: son el mismo SSD, asi que mover cosas entre ellas reparte, no amplia.
+El arbol y el vhdx de `Ubuntu-AOSP` viven en `E:\AOSP-Build\ext4.vhdx`.
+
+- El swap de WSL y el pagefile de Windows van **siempre en el SSD**, nunca en
+  Z: (`\192.168.0.209\Data`): Windows no admite pagefile en red y un corte
+  cuelga o corrompe el sistema.
+- Z: sirve para archivar (videos, descargas, zips de ROM ya publicados).
+- El vhdx de WSL crece pero no encoge solo; se compacta con
+  `wsl --manage Ubuntu-AOSP --resize` o `Optimize-VHD` tras un `wsl --shutdown`.
